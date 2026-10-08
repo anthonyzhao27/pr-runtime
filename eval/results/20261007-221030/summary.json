@@ -1,0 +1,101 @@
+{
+ "run_id": "latest",
+ "configs": {
+  "diff_only": {
+   "n_bugs": 36,
+   "n_clean": 20,
+   "recall_strict": 0.944,
+   "recall_semantic": 0.917,
+   "fp_rate": 0.0,
+   "findings_per_clean_pr": 0,
+   "p50_total_s": 116.7,
+   "p95_total_s": 238.1,
+   "by_variant": {
+    "red/historical": {
+     "n": 4,
+     "recall_strict": 1.0,
+     "recall_semantic": 1.0,
+     "flag_rate": 1.0
+    },
+    "red/synthetic": {
+     "n": 6,
+     "recall_strict": 1.0,
+     "recall_semantic": 1.0,
+     "flag_rate": 1.0
+    },
+    "red": {
+     "n": 10,
+     "recall_strict": 1.0,
+     "recall_semantic": 1.0,
+     "flag_rate": 1.0
+    },
+    "green/historical": {
+     "n": 4,
+     "recall_strict": 1.0,
+     "recall_semantic": 1.0,
+     "flag_rate": 1.0
+    },
+    "green/synthetic": {
+     "n": 22,
+     "recall_strict": 0.909,
+     "recall_semantic": 0.864,
+     "flag_rate": 0.909
+    },
+    "green": {
+     "n": 26,
+     "recall_strict": 0.923,
+     "recall_semantic": 0.885,
+     "flag_rate": 0.923
+    }
+   }
+  },
+  "full": {
+   "n_bugs": 36,
+   "n_clean": 20,
+   "recall_strict": 0.972,
+   "recall_semantic": 0.972,
+   "fp_rate": 0.0,
+   "findings_per_clean_pr": 0,
+   "p50_total_s": 67.5,
+   "p95_total_s": 200.3,
+   "by_variant": {
+    "red/historical": {
+     "n": 4,
+     "recall_strict": 1.0,
+     "recall_semantic": 1.0,
+     "flag_rate": 1.0
+    },
+    "red/synthetic": {
+     "n": 6,
+     "recall_strict": 1.0,
+     "recall_semantic": 1.0,
+     "flag_rate": 1.0
+    },
+    "red": {
+     "n": 10,
+     "recall_strict": 1.0,
+     "recall_semantic": 1.0,
+     "flag_rate": 1.0
+    },
+    "green/historical": {
+     "n": 4,
+     "recall_strict": 1.0,
+     "recall_semantic": 1.0,
+     "flag_rate": 1.0
+    },
+    "green/synthetic": {
+     "n": 22,
+     "recall_strict": 0.955,
+     "recall_semantic": 0.955,
+     "flag_rate": 0.955
+    },
+    "green": {
+     "n": 26,
+     "recall_strict": 0.962,
+     "recall_semantic": 0.962,
+     "flag_rate": 0.962
+    }
+   }
+  }
+ }
+}

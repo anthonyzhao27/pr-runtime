@@ -84,11 +84,19 @@ def main() -> None:
             return round(sum(1 for x in xs if x) / len(xs), 3) if xs else None
 
         by_var = {}
-        for var in ("red", "green"):
+        for var in ("red", "green", "noisy"):
+            for origin in ("historical", "synthetic"):
+                vs = [r for r in bugs if r["variant"] == var and bool(r.get("synthetic")) == (origin == "synthetic")]
+                if not vs:
+                    continue
+                by_var[f"{var}/{origin}"] = {"n": len(vs), "recall_strict": rate([r["strict"] for r in vs]),
+                                             "recall_semantic": rate([r["semantic"] for r in vs]) if a.judge else None,
+                                             "flag_rate": rate([r["flagged"] for r in vs])}
             vs = [r for r in bugs if r["variant"] == var]
-            by_var[var] = {"n": len(vs), "recall_strict": rate([r["strict"] for r in vs]),
-                           "recall_semantic": rate([r["semantic"] for r in vs]) if a.judge else None,
-                           "flag_rate": rate([r["flagged"] for r in vs])}
+            if vs:
+                by_var[var] = {"n": len(vs), "recall_strict": rate([r["strict"] for r in vs]),
+                               "recall_semantic": rate([r["semantic"] for r in vs]) if a.judge else None,
+                               "flag_rate": rate([r["flagged"] for r in vs])}
         totals = [r["task"].get("timings", {}).get("total") for r in rs if r["task"].get("timings", {}).get("total")]
         summary["configs"][cfg] = {
             "n_bugs": len(bugs), "n_clean": len(clean),
@@ -103,11 +111,14 @@ def main() -> None:
 
     (run / "summary.json").write_text(json.dumps(summary, indent=1))
     (run / "rows.json").write_text(json.dumps(rows, indent=1))
-    lines = [f"# Eval {run.name}", "", "| config | bugs | recall (strict) | recall (semantic) | green-test recall | clean PRs | FP rate | findings/clean PR | p50 total | p95 total |",
-             "|---|---|---|---|---|---|---|---|---|---|"]
+    lines = [f"# Eval {run.name}", "", "| config | bugs | recall (strict) | recall (semantic) | clean PRs | FP rate | findings/clean PR | p50 total | p95 total |",
+             "|---|---|---|---|---|---|---|---|---|"]
     for cfg, s in summary["configs"].items():
-        g = s["by_variant"]["green"]
-        lines.append(f"| {cfg} | {s['n_bugs']} | {s['recall_strict']} | {s['recall_semantic']} | {g['recall_strict']} (n={g['n']}) | {s['n_clean']} | {s['fp_rate']} | {s['findings_per_clean_pr']} | {s['p50_total_s']}s | {s['p95_total_s']}s |")
+        lines.append(f"| {cfg} | {s['n_bugs']} | {s['recall_strict']} | {s['recall_semantic']} | {s['n_clean']} | {s['fp_rate']} | {s['findings_per_clean_pr']} | {s['p50_total_s']}s | {s['p95_total_s']}s |")
+    lines += ["", "## By variant", "", "| config | variant | n | recall (strict) | recall (semantic) | flagged |", "|---|---|---|---|---|---|"]
+    for cfg, s in summary["configs"].items():
+        for var, v in s["by_variant"].items():
+            lines.append(f"| {cfg} | {var} | {v['n']} | {v['recall_strict']} | {v['recall_semantic']} | {v['flag_rate']} |")
     (run / "summary.md").write_text("\n".join(lines) + "\n")
     latest = run.parent / "latest"
     if latest.is_symlink() or latest.exists():

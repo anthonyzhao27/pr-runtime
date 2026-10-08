@@ -1195,5 +1195,291 @@
     "src_files": [
       "src/flask/app.py"
     ]
+  },
+  {
+    "kind": "bug",
+    "variant": "noisy",
+    "synthetic": true,
+    "branch": "bug/mut-789286-noisy",
+    "mutation": "del_stmt",
+    "upstream_msg": "synthetic: delete a statement in `headers.append(\"Rule\")`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 1092,
+        "end": 1092
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ],
+    "base_branch": "clean-base/d318b683",
+    "noise_commit": "d318b683471101618febed18996405ad26462110",
+    "noise_msg": "explain seek"
+  },
+  {
+    "kind": "bug",
+    "variant": "noisy",
+    "synthetic": true,
+    "branch": "bug/mut-746554-noisy",
+    "mutation": "guard",
+    "upstream_msg": "synthetic: remove an early-return guard in `if trv is not None:`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/templating.py",
+        "start": 85,
+        "end": 85
+      }
+    ],
+    "src_files": [
+      "src/flask/templating.py"
+    ],
+    "base_branch": "clean-base/2a8a38b0",
+    "noise_commit": "2a8a38b051fc248865730bf3511bf2e2ea325e81",
+    "noise_msg": "support query in methodview"
+  },
+  {
+    "kind": "bug",
+    "variant": "noisy",
+    "synthetic": true,
+    "branch": "bug/mut-187648-noisy",
+    "mutation": "del_stmt",
+    "upstream_msg": "synthetic: delete a statement in `rv = t.cast(Response, rv)`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 1352,
+        "end": 1352
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py"
+    ],
+    "base_branch": "clean-base/a29f88ce",
+    "noise_commit": "a29f88ce6f2f9843bd6fcbbfce1390a2071965d6",
+    "noise_msg": "document that headers must be set before streaming"
+  },
+  {
+    "kind": "bug",
+    "variant": "noisy",
+    "synthetic": true,
+    "branch": "bug/mut-656991-noisy",
+    "mutation": "not",
+    "upstream_msg": "synthetic: drop a negation in `if not is_running_from_reloader():`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 696,
+        "end": 696
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py"
+    ],
+    "base_branch": "clean-base/a411a243",
+    "noise_commit": "a411a2434b09d9cbaa4074232b2c247d591bb655",
+    "noise_msg": "add back opening session on context push"
+  },
+  {
+    "kind": "bug",
+    "variant": "noisy",
+    "synthetic": true,
+    "branch": "bug/mut-166445-noisy",
+    "mutation": "swap_args",
+    "upstream_msg": "synthetic: swap two call arguments in `and issubclass(param.annotation, AppContext)`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 295,
+        "end": 295
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py"
+    ],
+    "base_branch": "clean-base/dbd4c288",
+    "noise_commit": "dbd4c2882593f6118103120aa96fa9acdf7deedb",
+    "noise_msg": "Changed the static annotated type of select_jinja_autoescape method in src/flask/sansio/app.py"
+  },
+  {
+    "kind": "bug",
+    "variant": "noisy",
+    "synthetic": true,
+    "branch": "bug/mut-354223-noisy",
+    "mutation": "swap_args",
+    "upstream_msg": "synthetic: swap two call arguments in `handler = self._find_error_handler(e, ctx.request.blueprints)`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 890,
+        "end": 890
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py"
+    ],
+    "base_branch": "clean-base/d44f1c65",
+    "noise_commit": "d44f1c65239c3e33509224aa1931631243dbfa7f",
+    "noise_msg": "relax type hint for bytes io"
+  },
+  {
+    "kind": "bug",
+    "variant": "noisy",
+    "synthetic": true,
+    "branch": "bug/mut-074731-noisy",
+    "mutation": "cmp",
+    "upstream_msg": "synthetic: flip comparison operator in `if value is not None or ctx.obj.load_dotenv_defaults:`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 509,
+        "end": 509
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ],
+    "base_branch": "clean-base/6c44dd4b",
+    "noise_commit": "6c44dd4bb8e4f2ca5f135f172de4725b2cada155",
+    "noise_msg": "update helpers.send_from_directory docstring (#5599)"
+  },
+  {
+    "kind": "bug",
+    "variant": "noisy",
+    "synthetic": true,
+    "branch": "bug/mut-056173-noisy",
+    "mutation": "swap_args",
+    "upstream_msg": "synthetic: swap two call arguments in `return _stream(ctx, template, context)`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/templating.py",
+        "start": 197,
+        "end": 197
+      }
+    ],
+    "src_files": [
+      "src/flask/templating.py"
+    ],
+    "base_branch": "clean-base/c7da8c2a",
+    "noise_commit": "c7da8c2aa3a923fc620ad480a8831a8a0f21ab37",
+    "noise_msg": "Added python type annotation and return type."
+  },
+  {
+    "kind": "bug",
+    "variant": "noisy",
+    "synthetic": true,
+    "branch": "bug/mut-540432-noisy",
+    "mutation": "del_stmt",
+    "upstream_msg": "synthetic: delete a statement in `obj = self._prepare_response_obj(args, kwargs)`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/json/provider.py",
+        "start": 104,
+        "end": 104
+      }
+    ],
+    "src_files": [
+      "src/flask/json/provider.py"
+    ],
+    "base_branch": "clean-base/5fdce4c3",
+    "noise_commit": "5fdce4c331ac530280cc941179d364a07f4a1088",
+    "noise_msg": "Don't set the cli attribute in the sansio scaffold"
+  },
+  {
+    "kind": "bug",
+    "variant": "noisy",
+    "synthetic": true,
+    "branch": "bug/mut-682660-noisy",
+    "mutation": "del_stmt",
+    "upstream_msg": "synthetic: delete a statement in `\"\"\"The global data for this context. Accessed through :data:`.g`.\"\"\"`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/ctx.py",
+        "start": 313,
+        "end": 313
+      }
+    ],
+    "src_files": [
+      "src/flask/ctx.py"
+    ],
+    "base_branch": "clean-base/65271c10",
+    "noise_commit": "65271c105f7c247ecffc9a7121815276e092bd10",
+    "noise_msg": "Remove print left in by accident"
+  },
+  {
+    "kind": "bug",
+    "variant": "noisy",
+    "synthetic": true,
+    "branch": "bug/mut-686257-noisy",
+    "mutation": "cmp",
+    "upstream_msg": "synthetic: flip comparison operator in `if any(handler.level <= level for handler in current.handlers):`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/logging.py",
+        "start": 39,
+        "end": 39
+      }
+    ],
+    "src_files": [
+      "src/flask/logging.py"
+    ],
+    "base_branch": "clean-base/cc80a47f",
+    "noise_commit": "cc80a47f5be6c60e53c42ef9378e6db3b0e183b1",
+    "noise_msg": "Widen the response typing"
+  },
+  {
+    "kind": "bug",
+    "variant": "noisy",
+    "synthetic": true,
+    "branch": "bug/mut-250576-noisy",
+    "mutation": "cmp",
+    "upstream_msg": "synthetic: flip comparison operator in `if mode not in {\"r\", \"rt\", \"rb\"}:`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/blueprints.py",
+        "start": 120,
+        "end": 120
+      }
+    ],
+    "src_files": [
+      "src/flask/blueprints.py"
+    ],
+    "base_branch": "clean-base/17e146ad",
+    "noise_commit": "17e146ad949b3d80438faf95e81b53c543cb50f5",
+    "noise_msg": "Pass maxsplit via kwarg to re.split"
+  },
+  {
+    "kind": "bug",
+    "variant": "noisy",
+    "synthetic": true,
+    "branch": "bug/mut-304011-noisy",
+    "mutation": "cmp",
+    "upstream_msg": "synthetic: flip comparison operator in `if interactive_hook is not None:`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 1031,
+        "end": 1031
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ],
+    "base_branch": "clean-base/8705dd39",
+    "noise_commit": "8705dd39c4fa563ea0fe0bf84c85da8fcc98b88d",
+    "noise_msg": "set `Vary: Cookie` header consistently for session"
   }
 ]
