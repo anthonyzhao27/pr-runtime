@@ -204,6 +204,8 @@ class Scheduler:
             timings.update({k: round(v, 3) for k, v in (result.get("timings") or {}).items()})
             if b:
                 timings["runner_total"] = round(time.time() - b["assigned_at"], 3)
+                t.cost_compute_usd = round(settings.compute_usd(timings["runner_total"]), 6)
+                metrics.cost_usd.labels(kind="compute").inc(t.cost_compute_usd)
             t.timings = timings
             for k, v in (result.get("timings") or {}).items():
                 metrics.phase_seconds.labels(phase=k).observe(v)
@@ -250,6 +252,8 @@ class Scheduler:
             t.summary = r.get("summary")
             t.reviewer_model = r.get("model")
             t.tokens_in, t.tokens_out, t.tool_calls = r["tokens_in"], r["tokens_out"], r["tool_calls"]
+            t.cost_tokens_usd = round(settings.tokens_usd(r["tokens_in"], r["tokens_out"]), 6)
+            metrics.cost_usd.labels(kind="tokens").inc(t.cost_tokens_usd)
             t.findings = [Finding(path=f["path"], line=f.get("line"), severity=f["severity"], claim=f["claim"],
                                   evidence=f.get("evidence")) for f in r.get("findings", [])]
 
@@ -286,4 +290,7 @@ class Scheduler:
     def snapshot(self) -> dict:
         with self.lock:
             return {"pending": len(self.pending), "busy": len(self.busy), "cap": settings.admission_cap,
-                    "busy_tasks": {k: v["pod"] for k, v in self.busy.items()}}
+                    "busy_tasks": {k: v["pod"] for k, v in self.busy.items()},
+                    "pool_standing_usd_per_hour": round(settings.pool_standing_usd_per_hour(), 4),
+                    "prices": {"input_per_m": settings.price_input_per_m, "output_per_m": settings.price_output_per_m,
+                               "node_usd_per_hour": settings.node_usd_per_hour}}

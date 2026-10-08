@@ -106,16 +106,20 @@ def main() -> None:
             "fp_rate": rate([r["task"].get("verdict") == "REQUEST_CHANGES" for r in clean]),
             "findings_per_clean_pr": round(statistics.mean([len(r["task"].get("findings", [])) for r in clean]), 2) if clean else None,
             "p50_total_s": round(statistics.median(totals), 1) if totals else None,
+            "mean_cost_tokens_usd": round(statistics.mean([r["task"].get("cost_tokens_usd") or 0 for r in rs]), 4) if rs else None,
+            "mean_cost_compute_usd": round(statistics.mean([r["task"].get("cost_compute_usd") or 0 for r in rs]), 6) if rs else None,
+            "mean_tokens_in": round(statistics.mean([r["task"].get("tokens_in") or 0 for r in rs])) if rs else None,
+            "mean_tokens_out": round(statistics.mean([r["task"].get("tokens_out") or 0 for r in rs])) if rs else None,
             "p95_total_s": round(sorted(totals)[int(0.95 * (len(totals) - 1))], 1) if totals else None,
             "by_variant": by_var,
         }
 
     (run / "summary.json").write_text(json.dumps(summary, indent=1))
     (run / "rows.json").write_text(json.dumps(rows, indent=1))
-    lines = [f"# Eval {run.name}", "", "| config | bugs | recall (strict) | recall (semantic) | clean PRs | FP rate | findings/clean PR | p50 total | p95 total |",
-             "|---|---|---|---|---|---|---|---|---|"]
+    lines = [f"# Eval {run.name}", "", "| config | bugs | recall (strict) | recall (semantic) | clean PRs | FP rate | findings/clean PR | p50 total | p95 total | tokens in/out | $/PR tokens | $/PR compute |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for cfg, s in summary["configs"].items():
-        lines.append(f"| {cfg} | {s['n_bugs']} | {s['recall_strict']} | {s['recall_semantic']} | {s['n_clean']} | {s['fp_rate']} | {s['findings_per_clean_pr']} | {s['p50_total_s']}s | {s['p95_total_s']}s |")
+        lines.append(f"| {cfg} | {s['n_bugs']} | {s['recall_strict']} | {s['recall_semantic']} | {s['n_clean']} | {s['fp_rate']} | {s['findings_per_clean_pr']} | {s['p50_total_s']}s | {s['p95_total_s']}s | {s['mean_tokens_in']}/{s['mean_tokens_out']} | {s['mean_cost_tokens_usd']} | {s['mean_cost_compute_usd']} |")
     lines += ["", "## By variant", "", "| config | variant | n | recall (strict) | recall (semantic) | flagged |", "|---|---|---|---|---|---|"]
     for cfg, s in summary["configs"].items():
         for var, v in s["by_variant"].items():

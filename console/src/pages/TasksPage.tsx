@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getStats, getTask, listTasks } from "../lib/api";
-import { fmtInt, prUrl, relTime, shortSha, taskTotalSeconds } from "../lib/format";
+import { fmtInt, fmtUsd, prUrl, relTime, shortSha, taskCostUsd, taskTotalSeconds } from "../lib/format";
 import type { ServerEvent, Stats, Task, TaskState } from "../lib/types";
 import { TASK_STATES } from "../lib/types";
 import { useEvents, useTick } from "../lib/useEvents";
@@ -149,6 +149,11 @@ export function TasksPage() {
           value={stats ? `${stats.scheduler.busy} / ${stats.scheduler.cap}` : undefined}
           hint={stats ? `${Object.keys(stats.scheduler.busy_tasks).length} runner(s) assigned` : undefined}
         />
+        <Stat
+          label="pool"
+          value={stats && typeof stats.scheduler.pool_standing_usd_per_hour === "number" ? `${fmtUsd(stats.scheduler.pool_standing_usd_per_hour, 2)}/hr` : undefined}
+          hint="standing cost of the warm pool"
+        />
         <span className="h-4 w-px bg-line" />
         <div className="flex items-center gap-3">
           {TASK_STATES.map((s) => (
@@ -237,6 +242,7 @@ export function TasksPage() {
             <col className="w-[44px]" />
             <col className="w-[150px]" />
             <col className="w-[64px]" />
+            <col className="w-[72px]" />
             <col className="w-[60px]" />
           </colgroup>
           <thead className="bg-panel text-[11px] uppercase tracking-wide text-mute">
@@ -251,20 +257,23 @@ export function TasksPage() {
               </th>
               <th className="px-2 font-medium">Verdict</th>
               <th className="px-2 font-medium text-right">Find.</th>
+              <th className="px-2 font-medium text-right" title="compute + LLM tokens">
+                Cost
+              </th>
               <th className="px-3 font-medium text-right">Age</th>
             </tr>
           </thead>
           <tbody>
             {loading && tasks.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-mute text-[12px]">
+                <td colSpan={10} className="px-3 py-6 text-center text-mute text-[12px]">
                   loading…
                 </td>
               </tr>
             )}
             {!loading && tasks.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-mute text-[12px]">
+                <td colSpan={10} className="px-3 py-6 text-center text-mute text-[12px]">
                   no tasks{stateFilter || prFilter ? " match the current filter" : " yet"}
                 </td>
               </tr>
@@ -311,6 +320,12 @@ export function TasksPage() {
                   </td>
                   <td className="px-2 text-right font-mono text-[12px] tabular-nums">
                     {t.findings_count > 0 ? t.findings_count : <span className="text-mute">0</span>}
+                  </td>
+                  <td
+                    className="px-2 text-right font-mono text-[12px] tabular-nums text-fg/80"
+                    title={`compute ${fmtUsd(t.cost_compute_usd, 5)} · tokens ${fmtUsd(t.cost_tokens_usd, 3)}`}
+                  >
+                    {fmtUsd(taskCostUsd(t), 3)}
                   </td>
                   <td className="px-3 text-right font-mono text-[12px] tabular-nums text-mute" title={t.created_at}>
                     {relTime(t.created_at, now)}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError, getTask, postFeedback, rerunTask } from "../lib/api";
-import { absTime, fileUrl, fmtInt, fmtSeconds, fmtTokens, prUrl, shortSha, taskTotalSeconds } from "../lib/format";
+import { absTime, fileUrl, fmtInt, fmtSeconds, fmtTokens, fmtUsd, prUrl, shortSha, taskTotalSeconds } from "../lib/format";
 import type { Finding, ReviewConfig, ServerEvent, TaskFull } from "../lib/types";
 import { useEvents, useTick } from "../lib/useEvents";
 import { ColdDot, ConfigPill, SeverityPill, StatePill, VerdictPill } from "../components/Pill";
@@ -175,6 +175,7 @@ export function TaskDetailPage() {
           <Meta label="model" value={task.reviewer_model ?? "—"} mono />
           <Meta label="tokens" value={`${fmtTokens(task.tokens_in)} in / ${fmtTokens(task.tokens_out)} out`} mono />
           <Meta label="tool calls" value={fmtInt(task.tool_calls)} mono />
+          <Meta label="cost" value={`compute ${fmtUsd(task.cost_compute_usd, 5)} · tokens ${fmtUsd(task.cost_tokens_usd, 3)}`} mono />
           <Meta label="changed lines" value={fmtInt(task.priority)} mono />
           <Meta label="created" value={absTime(task.created_at)} mono />
           <Meta label="admitted" value={absTime(task.admitted_at)} mono />

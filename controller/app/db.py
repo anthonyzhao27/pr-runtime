@@ -57,6 +57,8 @@ class Task(Base):
     tool_calls: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     cold: Mapped[bool] = mapped_column(Boolean, default=False)  # true when no warm runner was available
+    cost_compute_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cost_tokens_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     findings: Mapped[list["Finding"]] = relationship(back_populates="task", cascade="all, delete-orphan")
 
@@ -72,6 +74,7 @@ class Task(Base):
             "reviewer_model": self.reviewer_model, "tokens_in": self.tokens_in, "tokens_out": self.tokens_out,
             "tool_calls": self.tool_calls, "error": self.error, "cold": self.cold,
             "touched_files": self.touched_files or [], "findings_count": len(self.findings),
+            "cost_compute_usd": self.cost_compute_usd, "cost_tokens_usd": self.cost_tokens_usd,
         }
         if full:
             d.update({
@@ -128,5 +131,16 @@ engine = create_engine(settings.database_url or "sqlite:///./dev.db", pool_pre_p
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
 
 
+MIGRATIONS = [
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cost_compute_usd FLOAT",
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cost_tokens_usd FLOAT",
+]
+
+
 def init_db() -> None:
     Base.metadata.create_all(engine)
+    if engine.dialect.name == "postgresql":
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            for stmt in MIGRATIONS:
+                conn.execute(text(stmt))

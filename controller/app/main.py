@@ -11,15 +11,19 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from . import events
-from .api import router
-from .config import settings
-from .db import init_db
-from .queue import QueueConsumer
-from .scheduler import Scheduler
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("main")
+
+from .bootstrap import load_secrets  # noqa: E402
+
+load_secrets()  # must run before .config / .db import settings
+
+from . import events  # noqa: E402
+from .api import router  # noqa: E402
+from .config import settings  # noqa: E402
+from .db import init_db  # noqa: E402
+from .queue import QueueConsumer  # noqa: E402
+from .scheduler import Scheduler  # noqa: E402
 STATIC = os.environ.get("STATIC_DIR", os.path.join(os.path.dirname(__file__), "..", "static"))
 
 

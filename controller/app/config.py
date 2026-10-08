@@ -31,6 +31,22 @@ class Settings:
     dev: bool = os.environ.get("DEV", "0") == "1"
     read_file_max_calls: int = _int("READ_FILE_MAX_CALLS", 5)
     ignore_actions: tuple[str, ...] = field(default_factory=lambda: ("closed",))
+    # Cost model (S5). Prices are USD per 1M tokens; node price USD/hour; a runner is charged its CPU-limit share of a node.
+    price_input_per_m: float = float(os.environ.get("PRICE_INPUT_PER_M", "10.0"))    # gpt-6-astra standard tier
+    price_output_per_m: float = float(os.environ.get("PRICE_OUTPUT_PER_M", "50.0"))
+    node_usd_per_hour: float = float(os.environ.get("NODE_USD_PER_HOUR", "0.0816"))  # m7g.large on-demand us-east-1
+    node_vcpu: float = float(os.environ.get("NODE_VCPU", "2"))
+    runner_cpu_limit: float = float(os.environ.get("RUNNER_CPU_LIMIT", "1"))
+    pool_size: int = _int("POOL_SIZE", 4)
+
+    def compute_usd(self, seconds: float) -> float:
+        return seconds * (self.node_usd_per_hour / 3600.0) * (self.runner_cpu_limit / self.node_vcpu)
+
+    def tokens_usd(self, tokens_in: int, tokens_out: int) -> float:
+        return tokens_in / 1e6 * self.price_input_per_m + tokens_out / 1e6 * self.price_output_per_m
+
+    def pool_standing_usd_per_hour(self) -> float:
+        return self.pool_size * self.node_usd_per_hour * (self.runner_cpu_limit / self.node_vcpu)
 
 
 settings = Settings()

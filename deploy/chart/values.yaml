@@ -11,6 +11,10 @@ controller:
   reviewerModel: gpt-6-astra
   judgeModel: gpt-6-luna
   reasoningEffort: high
+  secretsId: pr-runtime/app   # Secrets Manager secret id; empty = use the k8s Secret (.env) instead
+  nodeUsdPerHour: "0.0816"   # m7g.large on-demand, us-east-1
+  priceInputPerM: "10.0"     # gpt-6-astra standard tier
+  priceOutputPerM: "50.0"
   repo: anthonyzhao27/flask
   queueUrl: https://sqs.us-east-1.amazonaws.com/511572480852/pr-runtime-tasks
   postReviews: true

@@ -35,6 +35,8 @@ export interface Task {
   cold: boolean;
   touched_files: string[];
   findings_count: number;
+  cost_compute_usd: number | null; // runner pod seconds × node $/hr × CPU share
+  cost_tokens_usd: number | null;  // LLM tokens at list price
 }
 
 export interface FeedbackVote {
@@ -64,7 +66,14 @@ export interface TaskFull extends Task {
 }
 
 export interface Stats {
-  scheduler: { pending: number; busy: number; cap: number; busy_tasks: Record<string, string> };
+  scheduler: {
+    pending: number;
+    busy: number;
+    cap: number;
+    busy_tasks: Record<string, string>;
+    pool_standing_usd_per_hour: number;
+    prices: { input_per_m: number; output_per_m: number; node_usd_per_hour: number };
+  };
   tasks: Record<string, number>;
 }
 

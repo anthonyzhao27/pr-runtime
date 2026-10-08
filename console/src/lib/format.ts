@@ -71,3 +71,14 @@ export function taskTotalSeconds(t: Task, now = Date.now()): number | null {
   const sum = phases.reduce((acc, k) => acc + (typeof tm[k] === "number" ? tm[k] : 0), 0);
   return sum > 0 ? sum : null;
 }
+
+export function fmtUsd(v: number | null | undefined, digits = 3): string {
+  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  return `$${v.toFixed(digits)}`;
+}
+
+/** compute + tokens; null only when both are null. */
+export function taskCostUsd(t: Pick<Task, "cost_compute_usd" | "cost_tokens_usd">): number | null {
+  if (t.cost_compute_usd === null && t.cost_tokens_usd === null) return null;
+  return (t.cost_compute_usd ?? 0) + (t.cost_tokens_usd ?? 0);
+}

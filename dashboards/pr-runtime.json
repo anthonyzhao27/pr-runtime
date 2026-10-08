@@ -441,7 +441,7 @@
   },
   {
    "type": "timeseries",
-   "title": "Throughput: tasks posted/min and LLM tokens/min",
+   "title": "Throughput and spend",
    "gridPos": {
     "x": 12,
     "y": 23,
@@ -455,9 +455,14 @@
      "refId": "A"
     },
     {
-     "expr": "sum(rate(prr_llm_tokens_total[1m]))*60/1000",
-     "legendFormat": "k tokens/min",
+     "expr": "sum(rate(prr_cost_usd_total{kind=\"tokens\"}[1m]))*3600",
+     "legendFormat": "tokens $/hr",
      "refId": "B"
+    },
+    {
+     "expr": "sum(rate(prr_cost_usd_total{kind=\"compute\"}[1m]))*3600",
+     "legendFormat": "compute $/hr (marginal)",
+     "refId": "C"
     }
    ],
    "datasource": {
