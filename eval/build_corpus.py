@@ -114,21 +114,26 @@ def build_bug(repo: str, sha: str, msg: str, i: int, push: bool) -> list[dict]:
     if push:
         sh("git", "push", "-qf", "origin", red, cwd=repo)
 
-    # green: also reverse the test hunks from that commit
+    # green: the test hunks from that commit are reverted in a *base* branch, so the PR diff is source-only.
+    # (Showing "test deleted" in the diff would hand the reviewer the answer.)
     rc = subprocess.run(["sh", "-c", f"git show {sha} -- tests | git apply -R --check"], cwd=repo, capture_output=True)
     if rc.returncode == 0:
+        base = f"bug-base/{short}"
         green = f"bug/{short}-green"
-        sh("git", "checkout", "-q", "-B", green, red, cwd=repo)
+        sh("git", "checkout", "-q", "-B", base, "origin/main", cwd=repo)
         sh("sh", "-c", f"git show {sha} -- tests | git apply -R", cwd=repo)
         sh("git", "commit", "-qam", "Tidy tests", cwd=repo)
+        sh("git", "checkout", "-q", "-B", green, base, cwd=repo)
+        sh("sh", "-c", f"git show {sha} -- src | git apply -R", cwd=repo)
+        sh("git", "commit", "-qam", neutral_title(msg, i), cwd=repo)
         ok2, _ = run_tests(repo)
         if ok2:
-            entries.append({"kind": "bug", "variant": "green", "branch": green, "upstream_fix": sha, "upstream_msg": msg,
-                            "tests_pass": True, "hunks": hunks, "src_files": sorted({h["path"] for h in hunks})})
+            hunks_g = new_side_ranges(repo, base, green)
+            entries.append({"kind": "bug", "variant": "green", "branch": green, "base_branch": base, "upstream_fix": sha,
+                            "upstream_msg": msg, "tests_pass": True, "hunks": hunks_g,
+                            "src_files": sorted({h["path"] for h in hunks_g})})
             if push:
-                sh("git", "push", "-qf", "origin", green, cwd=repo)
-        else:
-            sh("git", "branch", "-qD", green, cwd=repo) if False else None
+                sh("git", "push", "-qf", "origin", base, green, cwd=repo)
     return entries
 
 
@@ -205,6 +210,8 @@ def main() -> None:
     entries += cleans
 
     OUT.mkdir(parents=True, exist_ok=True)
+    prev = json.loads((OUT / "corpus.json").read_text()) if (OUT / "corpus.json").exists() else []
+    entries += [e for e in prev if e.get("synthetic")]  # mutate.py owns those
     (OUT / "corpus.json").write_text(json.dumps(entries, indent=2))
     kinds = {}
     for e in entries:
