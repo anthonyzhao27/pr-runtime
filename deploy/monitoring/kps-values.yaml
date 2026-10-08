@@ -1,0 +1,23 @@
+# kube-prometheus-stack values (helm upgrade --install kps prometheus-community/kube-prometheus-stack -n monitoring -f this)
+alertmanager:
+  enabled: false
+prometheus:
+  prometheusSpec:
+    scrapeInterval: 5s
+    evaluationInterval: 5s
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+grafana:
+  adminPassword: pr-runtime
+  grafana.ini:
+    auth.anonymous:
+      enabled: true
+      org_role: Viewer
+    auth:
+      disable_login_form: false
+    dashboards:
+      default_home_dashboard_path: /tmp/dashboards/pr-runtime.json
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
