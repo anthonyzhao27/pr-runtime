@@ -1202,19 +1202,19 @@
     "kind": "bug",
     "variant": "noisy",
     "synthetic": true,
-    "branch": "bug/mut-789286-noisy",
+    "branch": "bug/mut-721978-noisy",
     "mutation": "del_stmt",
-    "upstream_msg": "synthetic: delete a statement in `headers.append(\"Rule\")`",
+    "upstream_msg": "synthetic: delete a statement in `cli.show_server_banner(self.debug, self.name)`",
     "tests_pass": true,
     "hunks": [
       {
-        "path": "src/flask/cli.py",
-        "start": 1092,
-        "end": 1092
+        "path": "src/flask/app.py",
+        "start": 743,
+        "end": 743
       }
     ],
     "src_files": [
-      "src/flask/cli.py"
+      "src/flask/app.py"
     ],
     "base_branch": "clean-base/d318b683",
     "noise_commit": "d318b683471101618febed18996405ad26462110",
@@ -1224,19 +1224,19 @@
     "kind": "bug",
     "variant": "noisy",
     "synthetic": true,
-    "branch": "bug/mut-746554-noisy",
-    "mutation": "guard",
-    "upstream_msg": "synthetic: remove an early-return guard in `if trv is not None:`",
+    "branch": "bug/mut-638597-noisy",
+    "mutation": "cmp",
+    "upstream_msg": "synthetic: flip comparison operator in `len(args) == 1 and args[0] in self.get_help_option_names(ctx)`",
     "tests_pass": true,
     "hunks": [
       {
-        "path": "src/flask/templating.py",
-        "start": 85,
-        "end": 85
+        "path": "src/flask/cli.py",
+        "start": 680,
+        "end": 680
       }
     ],
     "src_files": [
-      "src/flask/templating.py"
+      "src/flask/cli.py"
     ],
     "base_branch": "clean-base/2a8a38b0",
     "noise_commit": "2a8a38b051fc248865730bf3511bf2e2ea325e81",
@@ -1246,15 +1246,15 @@
     "kind": "bug",
     "variant": "noisy",
     "synthetic": true,
-    "branch": "bug/mut-187648-noisy",
-    "mutation": "del_stmt",
-    "upstream_msg": "synthetic: delete a statement in `rv = t.cast(Response, rv)`",
+    "branch": "bug/mut-962775-noisy",
+    "mutation": "guard",
+    "upstream_msg": "synthetic: remove an early-return guard in `if method is base_method:`",
     "tests_pass": true,
     "hunks": [
       {
         "path": "src/flask/app.py",
-        "start": 1352,
-        "end": 1352
+        "start": 276,
+        "end": 276
       }
     ],
     "src_files": [
@@ -1262,27 +1262,25 @@
     ],
     "base_branch": "clean-base/a29f88ce",
     "noise_commit": "a29f88ce6f2f9843bd6fcbbfce1390a2071965d6",
-    "noise_msg": "document that headers must be set before streaming",
-    "equivalent": true,
-    "note": "equivalent mutant (no-op deletion)"
+    "noise_msg": "document that headers must be set before streaming"
   },
   {
     "kind": "bug",
     "variant": "noisy",
     "synthetic": true,
-    "branch": "bug/mut-656991-noisy",
-    "mutation": "not",
-    "upstream_msg": "synthetic: drop a negation in `if not is_running_from_reloader():`",
+    "branch": "bug/mut-813230-noisy",
+    "mutation": "del_stmt",
+    "upstream_msg": "synthetic: delete a statement in `info = ctx.ensure_object(ScriptInfo)`",
     "tests_pass": true,
     "hunks": [
       {
-        "path": "src/flask/app.py",
-        "start": 696,
-        "end": 696
+        "path": "src/flask/cli.py",
+        "start": 444,
+        "end": 444
       }
     ],
     "src_files": [
-      "src/flask/app.py"
+      "src/flask/cli.py"
     ],
     "base_branch": "clean-base/a411a243",
     "noise_commit": "a411a2434b09d9cbaa4074232b2c247d591bb655",
@@ -1292,15 +1290,15 @@
     "kind": "bug",
     "variant": "noisy",
     "synthetic": true,
-    "branch": "bug/mut-166445-noisy",
-    "mutation": "swap_args",
-    "upstream_msg": "synthetic: swap two call arguments in `and issubclass(param.annotation, AppContext)`",
+    "branch": "bug/mut-064290-noisy",
+    "mutation": "boolop",
+    "upstream_msg": "synthetic: swap and/or in `if value is None or isinstance(value, timedelta):`",
     "tests_pass": true,
     "hunks": [
       {
         "path": "src/flask/app.py",
-        "start": 295,
-        "end": 295
+        "start": 74,
+        "end": 74
       }
     ],
     "src_files": [
@@ -1314,19 +1312,19 @@
     "kind": "bug",
     "variant": "noisy",
     "synthetic": true,
-    "branch": "bug/mut-354223-noisy",
-    "mutation": "swap_args",
-    "upstream_msg": "synthetic: swap two call arguments in `handler = self._find_error_handler(e, ctx.request.blueprints)`",
+    "branch": "bug/mut-875749-noisy",
+    "mutation": "del_stmt",
+    "upstream_msg": "synthetic: delete a statement in `startup = os.environ.get(\"PYTHONSTARTUP\")`",
     "tests_pass": true,
     "hunks": [
       {
-        "path": "src/flask/app.py",
-        "start": 890,
-        "end": 890
+        "path": "src/flask/cli.py",
+        "start": 1019,
+        "end": 1019
       }
     ],
     "src_files": [
-      "src/flask/app.py"
+      "src/flask/cli.py"
     ],
     "base_branch": "clean-base/d44f1c65",
     "noise_commit": "d44f1c65239c3e33509224aa1931631243dbfa7f",
@@ -1336,19 +1334,19 @@
     "kind": "bug",
     "variant": "noisy",
     "synthetic": true,
-    "branch": "bug/mut-074731-noisy",
+    "branch": "bug/mut-237180-noisy",
     "mutation": "cmp",
-    "upstream_msg": "synthetic: flip comparison operator in `if value is not None or ctx.obj.load_dotenv_defaults:`",
+    "upstream_msg": "synthetic: flip comparison operator in `if \"b\" in mode:`",
     "tests_pass": true,
     "hunks": [
       {
-        "path": "src/flask/cli.py",
-        "start": 509,
-        "end": 509
+        "path": "src/flask/app.py",
+        "start": 462,
+        "end": 462
       }
     ],
     "src_files": [
-      "src/flask/cli.py"
+      "src/flask/app.py"
     ],
     "base_branch": "clean-base/6c44dd4b",
     "noise_commit": "6c44dd4bb8e4f2ca5f135f172de4725b2cada155",
@@ -1358,19 +1356,19 @@
     "kind": "bug",
     "variant": "noisy",
     "synthetic": true,
-    "branch": "bug/mut-056173-noisy",
-    "mutation": "swap_args",
-    "upstream_msg": "synthetic: swap two call arguments in `return _stream(ctx, template, context)`",
+    "branch": "bug/mut-527982-noisy",
+    "mutation": "del_stmt",
+    "upstream_msg": "synthetic: delete a statement in `context.update(orig_ctx)`",
     "tests_pass": true,
     "hunks": [
       {
-        "path": "src/flask/templating.py",
-        "start": 197,
-        "end": 197
+        "path": "src/flask/app.py",
+        "start": 616,
+        "end": 616
       }
     ],
     "src_files": [
-      "src/flask/templating.py"
+      "src/flask/app.py"
     ],
     "base_branch": "clean-base/c7da8c2a",
     "noise_commit": "c7da8c2aa3a923fc620ad480a8831a8a0f21ab37",
@@ -1380,19 +1378,19 @@
     "kind": "bug",
     "variant": "noisy",
     "synthetic": true,
-    "branch": "bug/mut-540432-noisy",
-    "mutation": "del_stmt",
-    "upstream_msg": "synthetic: delete a statement in `obj = self._prepare_response_obj(args, kwargs)`",
+    "branch": "bug/mut-703865-noisy",
+    "mutation": "boolop",
+    "upstream_msg": "synthetic: swap and/or in `len(args) == 1 and args[0] in self.get_help_option_names(ctx)`",
     "tests_pass": true,
     "hunks": [
       {
-        "path": "src/flask/json/provider.py",
-        "start": 104,
-        "end": 104
+        "path": "src/flask/cli.py",
+        "start": 680,
+        "end": 680
       }
     ],
     "src_files": [
-      "src/flask/json/provider.py"
+      "src/flask/cli.py"
     ],
     "base_branch": "clean-base/5fdce4c3",
     "noise_commit": "5fdce4c331ac530280cc941179d364a07f4a1088",
@@ -1402,90 +1400,44 @@
     "kind": "bug",
     "variant": "noisy",
     "synthetic": true,
-    "branch": "bug/mut-682660-noisy",
-    "mutation": "del_stmt",
-    "upstream_msg": "synthetic: delete a statement in `\"\"\"The global data for this context. Accessed through :data:`.g`.\"\"\"`",
-    "tests_pass": true,
-    "hunks": [
-      {
-        "path": "src/flask/ctx.py",
-        "start": 313,
-        "end": 313
-      }
-    ],
-    "src_files": [
-      "src/flask/ctx.py"
-    ],
-    "base_branch": "clean-base/65271c10",
-    "noise_commit": "65271c105f7c247ecffc9a7121815276e092bd10",
-    "noise_msg": "Remove print left in by accident",
-    "equivalent": true,
-    "note": "equivalent mutant (no-op deletion)"
-  },
-  {
-    "kind": "bug",
-    "variant": "noisy",
-    "synthetic": true,
-    "branch": "bug/mut-686257-noisy",
+    "branch": "bug/mut-096639-noisy",
     "mutation": "cmp",
-    "upstream_msg": "synthetic: flip comparison operator in `if any(handler.level <= level for handler in current.handlers):`",
-    "tests_pass": true,
-    "hunks": [
-      {
-        "path": "src/flask/logging.py",
-        "start": 39,
-        "end": 39
-      }
-    ],
-    "src_files": [
-      "src/flask/logging.py"
-    ],
-    "base_branch": "clean-base/cc80a47f",
-    "noise_commit": "cc80a47f5be6c60e53c42ef9378e6db3b0e183b1",
-    "noise_msg": "Widen the response typing"
-  },
-  {
-    "kind": "bug",
-    "variant": "noisy",
-    "synthetic": true,
-    "branch": "bug/mut-250576-noisy",
-    "mutation": "cmp",
-    "upstream_msg": "synthetic: flip comparison operator in `if mode not in {\"r\", \"rt\", \"rb\"}:`",
+    "upstream_msg": "synthetic: flip comparison operator in `if value is None:`",
     "tests_pass": true,
     "hunks": [
       {
         "path": "src/flask/blueprints.py",
-        "start": 120,
-        "end": 120
+        "start": 74,
+        "end": 74
       }
     ],
     "src_files": [
       "src/flask/blueprints.py"
     ],
-    "base_branch": "clean-base/17e146ad",
-    "noise_commit": "17e146ad949b3d80438faf95e81b53c543cb50f5",
-    "noise_msg": "Pass maxsplit via kwarg to re.split"
+    "base_branch": "clean-base/65271c10",
+    "noise_commit": "65271c105f7c247ecffc9a7121815276e092bd10",
+    "noise_msg": "Remove print left in by accident"
   },
   {
     "kind": "bug",
     "variant": "noisy",
     "synthetic": true,
-    "branch": "bug/mut-304011-noisy",
+    "branch": "bug/mut-158634-noisy",
     "mutation": "cmp",
-    "upstream_msg": "synthetic: flip comparison operator in `if interactive_hook is not None:`",
+    "upstream_msg": "synthetic: flip comparison operator in `elif bp_url_prefix is not None:`",
     "tests_pass": true,
     "hunks": [
       {
-        "path": "src/flask/cli.py",
-        "start": 1031,
-        "end": 1031
+        "path": "src/flask/sansio/blueprints.py",
+        "start": 371,
+        "end": 371
       }
     ],
     "src_files": [
-      "src/flask/cli.py"
+      "src/flask/sansio/blueprints.py"
     ],
-    "base_branch": "clean-base/8705dd39",
-    "noise_commit": "8705dd39c4fa563ea0fe0bf84c85da8fcc98b88d",
-    "noise_msg": "set `Vary: Cookie` header consistently for session"
+    "base_branch": "clean-base/cc80a47f",
+    "noise_commit": "cc80a47f5be6c60e53c42ef9378e6db3b0e183b1",
+    "noise_msg": "Widen the response typing"
   }
 ]
