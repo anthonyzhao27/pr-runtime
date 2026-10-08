@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+import time
 
 import httpx
 
@@ -8,6 +10,28 @@ from .config import settings
 
 log = logging.getLogger("github")
 API = "https://api.github.com"
+_post_lock = threading.Lock()  # GitHub's secondary rate limit punishes concurrent content creation from one identity
+_last_post = 0.0
+MIN_POST_GAP = 1.5
+
+
+def _post_review_request(url: str, payload: dict) -> httpx.Response:
+    """Serialized POST with backoff on GitHub's 403/429 secondary rate limit (honours Retry-After)."""
+    global _last_post
+    with _post_lock:
+        for attempt in range(5):
+            gap = MIN_POST_GAP - (time.monotonic() - _last_post)
+            if gap > 0:
+                time.sleep(gap)
+            r = httpx.post(url, headers=_headers(), json=payload, timeout=30)
+            _last_post = time.monotonic()
+            if r.status_code in (403, 429) and ("rate limit" in r.text.lower() or "abuse" in r.text.lower() or r.headers.get("Retry-After")):
+                wait = int(r.headers.get("Retry-After", "0")) or min(60 * (attempt + 1), 180)
+                log.warning("GitHub secondary rate limit (attempt %d); sleeping %ss", attempt + 1, wait)
+                time.sleep(wait)
+                continue
+            return r
+        return r
 
 
 def _headers() -> dict:
@@ -36,19 +60,20 @@ def post_review(repo: str, pr_number: int, head_sha: str, verdict: str, body: st
         return None
     event = {"APPROVE": "APPROVE", "REQUEST_CHANGES": "REQUEST_CHANGES"}.get(verdict, "COMMENT")
     payload = {"commit_id": head_sha, "body": body, "event": event, "comments": comments}
-    r = httpx.post(f"{API}/repos/{repo}/pulls/{pr_number}/reviews", headers=_headers(), json=payload, timeout=30)
+    url = f"{API}/repos/{repo}/pulls/{pr_number}/reviews"
+    r = _post_review_request(url, payload)
     if r.status_code == 422 and "own pull request" in r.text and event != "COMMENT":
         # GitHub refuses APPROVE/REQUEST_CHANGES from the PR author. Same identity = comment with the verdict in the body.
         log.info("self-review on #%s; downgrading %s to COMMENT", pr_number, event)
         payload["event"] = "COMMENT"
         payload["body"] = f"**Verdict: {verdict}**\n\n{body}"
-        r = httpx.post(f"{API}/repos/{repo}/pulls/{pr_number}/reviews", headers=_headers(), json=payload, timeout=30)
+        r = _post_review_request(url, payload)
     if r.status_code == 422 and comments:
         # Usually a comment on a line outside the diff. Retry without inline comments so the verdict still lands.
         log.warning("review 422 for #%s: %s; retrying without inline comments", pr_number, r.text[:300])
         payload["comments"] = []
         payload["body"] = body + "\n\n" + "\n".join(f"- `{c['path']}:{c.get('line')}` {c['body']}" for c in comments)
-        r = httpx.post(f"{API}/repos/{repo}/pulls/{pr_number}/reviews", headers=_headers(), json=payload, timeout=30)
+        r = _post_review_request(url, payload)
     r.raise_for_status()
     return r.json().get("html_url")
 

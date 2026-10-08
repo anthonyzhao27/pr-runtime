@@ -27,7 +27,7 @@ class Scheduler:
         self.assigned_pods: set[str] = set()
         self.bad_pods: dict[str, float] = {}
         self.pods = RunnerPods()
-        self.review_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="review")
+        self.review_pool = ThreadPoolExecutor(max_workers=settings.review_workers, thread_name_prefix="review")
         self._stop = threading.Event()
 
     # ---- queue side -------------------------------------------------------------------------
@@ -79,6 +79,7 @@ class Scheduler:
         with self.lock:
             metrics.runners_idle.set(len(idle))
             metrics.runners_busy.set(len(self.busy))
+            metrics.reviews_in_flight.set(self.review_pool._work_queue.qsize() + sum(1 for t in self.review_pool._threads if t.is_alive()) if hasattr(self.review_pool, "_threads") else 0)
             metrics.tasks_pending.set(len(self.pending))
 
             if self.pending and len(self.busy) >= settings.admission_cap:

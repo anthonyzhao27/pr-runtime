@@ -22,6 +22,7 @@ class Settings:
     reasoning_effort: str = os.environ.get("REASONING_EFFORT", "high")  # low | medium | high | xhigh
     default_config: str = os.environ.get("DEFAULT_CONFIG", "full")  # full | diff_only
     admission_cap: int = _int("ADMISSION_CAP", 4)
+    review_workers: int = _int("REVIEW_WORKERS", 12)  # LLM stage is I/O bound; separate knob from the runner cap
     task_deadline: int = _int("TASK_DEADLINE_SECONDS", 300)
     runner_selector: str = os.environ.get("RUNNER_SELECTOR", "app=runner")
     runner_port: int = _int("RUNNER_PORT", 8080)

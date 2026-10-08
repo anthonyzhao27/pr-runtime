@@ -4,6 +4,7 @@ PHASE_BUCKETS = (0.5, 1, 2, 3, 5, 8, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300)
 
 tasks_pending = Gauge("prr_tasks_pending", "Tasks admitted by the controller but waiting for a runner")
 runners_idle = Gauge("prr_runners_idle", "Warm runner pods ready and unassigned")
+reviews_in_flight = Gauge("prr_reviews_in_flight", "Tasks in the LLM review stage (queued + running)")
 runners_busy = Gauge("prr_runners_busy", "Runner pods currently executing a task")
 admission_rejects = Counter("prr_admission_rejects_total", "Scheduler ticks where work waited because busy >= cap")
 tasks_total = Counter("prr_tasks_total", "Tasks by terminal state", ["state"])

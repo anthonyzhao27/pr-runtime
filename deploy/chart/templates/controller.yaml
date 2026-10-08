@@ -77,6 +77,8 @@ spec:
               value: {{ .Values.controller.reviewerModel | quote }}
             - name: JUDGE_MODEL
               value: {{ .Values.controller.judgeModel | quote }}
+            - name: REVIEW_WORKERS
+              value: {{ .Values.controller.reviewWorkers | default 12 | quote }}
             - name: REASONING_EFFORT
               value: {{ .Values.controller.reasoningEffort | default "high" | quote }}
             - name: POST_REVIEWS
