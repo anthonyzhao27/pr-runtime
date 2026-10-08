@@ -6,6 +6,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 main, noisy = (HERE / "results" / sys.argv[1]), (HERE / "results" / sys.argv[2])
+extras = [HERE / "results" / x for x in sys.argv[3:]]  # runs whose *new* configs (e.g. guided) are added as-is
 out = HERE / "results" / "combined"
 out.mkdir(exist_ok=True)
 ms, ns = json.loads((main / "summary.json").read_text()), json.loads((noisy / "summary.json").read_text())
@@ -23,12 +24,20 @@ for cfg, s in ms["configs"].items():
         "n_equivalent_excluded": s.get("n_equivalent_excluded", 0) + n.get("n_equivalent_excluded", 0),
         "by_variant": bv,
     }
+for ex in extras:
+    es = json.loads((ex / "summary.json").read_text())
+    for cfg, s in es["configs"].items():
+        if cfg not in merged["configs"]:
+            merged["configs"][cfg] = s
+    merged["run_id"] += "+" + ex.name
 (out / "summary.json").write_text(json.dumps(merged, indent=1))
 rows = json.loads((main / "rows.json").read_text()) + json.loads((noisy / "rows.json").read_text())
+for ex in extras:
+    rows += [r for r in json.loads((ex / "rows.json").read_text()) if r["config"] not in ("full", "diff_only")]
 (out / "rows.json").write_text(json.dumps(rows, indent=1))
-lines = [f"# Eval combined: {merged['run_id']}", "", "| config | bugs | recall (strict) | recall (semantic) | clean PRs | FP rate | p50 total (burst) | p95 |", "|---|---|---|---|---|---|---|---|"]
+lines = [f"# Eval combined: {merged['run_id']}", "", "| config | bugs | recall (strict) | recall (semantic) | clean PRs | FP rate | p50 total (burst) | p95 | tokens in/out |", "|---|---|---|---|---|---|---|---|---|"]
 for cfg, s in merged["configs"].items():
-    lines.append(f"| {cfg} | {s['n_bugs']} | {s['recall_strict']} | {s['recall_semantic']} | {s['n_clean']} | {s['fp_rate']} | {s['p50_total_s']}s | {s['p95_total_s']}s |")
+    lines.append(f"| {cfg} | {s['n_bugs']} | {s['recall_strict']} | {s['recall_semantic']} | {s['n_clean']} | {s['fp_rate']} | {s['p50_total_s']}s | {s['p95_total_s']}s | {s.get('mean_tokens_in','-')}/{s.get('mean_tokens_out','-')} |")
 lines += ["", "| config | variant | n | strict | semantic |", "|---|---|---|---|---|"]
 for cfg, s in merged["configs"].items():
     for var, v in s["by_variant"].items():
