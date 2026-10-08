@@ -63,6 +63,11 @@ class Sites(ast.NodeVisitor):
             # a single-line call statement or simple assignment that is not the only statement
             if len(node.body) > 2 and isinstance(stmt, (ast.Expr, ast.Assign, ast.AugAssign)) and \
                getattr(stmt, "end_lineno", stmt.lineno) == stmt.lineno and not (i == 0 and isinstance(stmt, ast.Expr)):
+                if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant):
+                    continue  # docstring / bare literal: deleting it changes nothing
+                if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Call) and \
+                   ast.unparse(stmt.value.func).split(".")[-1] == "cast":
+                    continue  # typing.cast is a runtime no-op
                 self.sites.append(("del_stmt", stmt))
         self.generic_visit(node)
 
@@ -225,17 +230,32 @@ def main() -> None:
             per_kind[kind] = per_kind.get(kind, 0) + 1
             variant = ("noisy" if a.noisy else "green") if green else "red"
             branch = f"bug/{mid}-{variant}"
-            sh("git", "checkout", "-q", "-B", branch, "origin/main", cwd=repo)
+            if a.noisy:
+                # Diffs (ours and GitHub's) are taken from the merge-base. A base that merely *branched off* main
+                # contributes nothing, so: start from clean-base (= main minus C), re-apply C, then mutate.
+                cb = clean_bases[survivors % len(clean_bases)]
+                sh("git", "checkout", "-q", "-B", branch, f"origin/{cb['base_branch']}", cwd=repo)
+                cp = subprocess.run(["git", "cherry-pick", "--no-edit", cb["upstream_commit"]], cwd=repo, capture_output=True)
+                if cp.returncode != 0:
+                    subprocess.run(["git", "cherry-pick", "--abort"], cwd=repo, capture_output=True)
+                    sh("git", "checkout", "-q", "--force", "origin/main", cwd=repo)
+                    path.write_text(original)
+                    continue
+                if Path(repo, rel).read_text() != original:
+                    # the noise commit touches the mutated file; re-derive the mutation on the new content is out of scope
+                    sh("git", "checkout", "-q", "--force", "origin/main", cwd=repo)
+                    path.write_text(original)
+                    continue
+            else:
+                sh("git", "checkout", "-q", "-B", branch, "origin/main", cwd=repo)
             path.write_text(candidate)
             sh("git", "commit", "-qam", f"Simplify {Path(rel).stem} logic", cwd=repo)
-            # head must be a descendant of base for GitHub to open the PR; clean-base = main minus C, so main is ahead. OK.
             if not a.no_push:
                 sh("git", "push", "-qf", "origin", branch, cwd=repo)
             entry = {"kind": "bug", "variant": variant, "synthetic": True, "branch": branch,
                      "mutation": kind, "upstream_msg": f"synthetic: {describe(kind, target, original.splitlines())}",
                      "tests_pass": green, "hunks": [{"path": rel, "start": lineno, "end": lineno}], "src_files": [rel]}
             if a.noisy:
-                cb = clean_bases[(survivors) % len(clean_bases)]
                 entry["base_branch"] = cb["base_branch"]
                 entry["noise_commit"] = cb["upstream_commit"]
                 entry["noise_msg"] = cb["upstream_msg"]

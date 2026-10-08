@@ -2,52 +2,52 @@
  "run_id": "noisy-20261007-222346",
  "configs": {
   "diff_only": {
-   "n_bugs": 13,
+   "n_bugs": 11,
    "n_clean": 0,
-   "n_equivalent_excluded": 0,
-   "recall_strict": 0.846,
-   "recall_semantic": 0.769,
+   "n_equivalent_excluded": 2,
+   "recall_strict": 1.0,
+   "recall_semantic": 1.0,
    "fp_rate": null,
    "findings_per_clean_pr": null,
    "p50_total_s": 41.9,
    "p95_total_s": 59.0,
    "by_variant": {
     "noisy/synthetic": {
-     "n": 13,
-     "recall_strict": 0.846,
-     "recall_semantic": 0.769,
-     "flag_rate": 0.846
+     "n": 11,
+     "recall_strict": 1.0,
+     "recall_semantic": 1.0,
+     "flag_rate": 1.0
     },
     "noisy": {
-     "n": 13,
-     "recall_strict": 0.846,
-     "recall_semantic": 0.769,
-     "flag_rate": 0.846
+     "n": 11,
+     "recall_strict": 1.0,
+     "recall_semantic": 1.0,
+     "flag_rate": 1.0
     }
    }
   },
   "full": {
-   "n_bugs": 13,
+   "n_bugs": 11,
    "n_clean": 0,
-   "n_equivalent_excluded": 0,
-   "recall_strict": 0.846,
-   "recall_semantic": 0.846,
+   "n_equivalent_excluded": 2,
+   "recall_strict": 1.0,
+   "recall_semantic": 1.0,
    "fp_rate": null,
    "findings_per_clean_pr": null,
    "p50_total_s": 47.6,
    "p95_total_s": 62.2,
    "by_variant": {
     "noisy/synthetic": {
-     "n": 13,
-     "recall_strict": 0.846,
-     "recall_semantic": 0.846,
-     "flag_rate": 0.846
+     "n": 11,
+     "recall_strict": 1.0,
+     "recall_semantic": 1.0,
+     "flag_rate": 1.0
     },
     "noisy": {
-     "n": 13,
-     "recall_strict": 0.846,
-     "recall_semantic": 0.846,
-     "flag_rate": 0.846
+     "n": 11,
+     "recall_strict": 1.0,
+     "recall_semantic": 1.0,
+     "flag_rate": 1.0
     }
    }
   }

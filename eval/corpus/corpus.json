@@ -1262,7 +1262,9 @@
     ],
     "base_branch": "clean-base/a29f88ce",
     "noise_commit": "a29f88ce6f2f9843bd6fcbbfce1390a2071965d6",
-    "noise_msg": "document that headers must be set before streaming"
+    "noise_msg": "document that headers must be set before streaming",
+    "equivalent": true,
+    "note": "equivalent mutant (no-op deletion)"
   },
   {
     "kind": "bug",
@@ -1416,7 +1418,9 @@
     ],
     "base_branch": "clean-base/65271c10",
     "noise_commit": "65271c105f7c247ecffc9a7121815276e092bd10",
-    "noise_msg": "Remove print left in by accident"
+    "noise_msg": "Remove print left in by accident",
+    "equivalent": true,
+    "note": "equivalent mutant (no-op deletion)"
   },
   {
     "kind": "bug",

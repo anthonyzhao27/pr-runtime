@@ -17,23 +17,11 @@
   "pr": 71,
   "branch": "bug/mut-746554-noisy",
   "strict": true,
-  "semantic": false,
+  "semantic": true,
   "flagged": true,
   "findings": 1,
   "total_s": 18.103,
   "upstream_msg": "synthetic: remove an early-return guard in `if trv is not None:`"
- },
- {
-  "config": "diff_only",
-  "variant": "noisy",
-  "pr": 69,
-  "branch": "bug/mut-187648-noisy",
-  "strict": false,
-  "semantic": false,
-  "flagged": false,
-  "findings": 0,
-  "total_s": 12.766,
-  "upstream_msg": "synthetic: delete a statement in `rv = t.cast(Response, rv)`"
  },
  {
   "config": "diff_only",
@@ -110,18 +98,6 @@
  {
   "config": "diff_only",
   "variant": "noisy",
-  "pr": 77,
-  "branch": "bug/mut-682660-noisy",
-  "strict": false,
-  "semantic": false,
-  "flagged": false,
-  "findings": 0,
-  "total_s": 27.985,
-  "upstream_msg": "synthetic: delete a statement in `\"\"\"The global data for this context. Accessed through :data:`.g`.\"\"\"`"
- },
- {
-  "config": "diff_only",
-  "variant": "noisy",
   "pr": 79,
   "branch": "bug/mut-686257-noisy",
   "strict": true,
@@ -178,18 +154,6 @@
   "findings": 1,
   "total_s": 29.195,
   "upstream_msg": "synthetic: remove an early-return guard in `if trv is not None:`"
- },
- {
-  "config": "full",
-  "variant": "noisy",
-  "pr": 69,
-  "branch": "bug/mut-187648-noisy",
-  "strict": false,
-  "semantic": false,
-  "flagged": false,
-  "findings": 0,
-  "total_s": 13.227,
-  "upstream_msg": "synthetic: delete a statement in `rv = t.cast(Response, rv)`"
  },
  {
   "config": "full",
@@ -262,18 +226,6 @@
   "findings": 1,
   "total_s": 51.791,
   "upstream_msg": "synthetic: delete a statement in `obj = self._prepare_response_obj(args, kwargs)`"
- },
- {
-  "config": "full",
-  "variant": "noisy",
-  "pr": 77,
-  "branch": "bug/mut-682660-noisy",
-  "strict": false,
-  "semantic": false,
-  "flagged": false,
-  "findings": 0,
-  "total_s": 55.707,
-  "upstream_msg": "synthetic: delete a statement in `\"\"\"The global data for this context. Accessed through :data:`.g`.\"\"\"`"
  },
  {
   "config": "full",
