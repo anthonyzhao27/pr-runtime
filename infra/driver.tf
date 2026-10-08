@@ -86,7 +86,7 @@ resource "aws_instance" "driver" {
   user_data = <<-EOT
     #!/bin/bash
     set -eux
-    dnf install -y docker git python3.11 jq
+    dnf install -y docker git python3.11 jq make
     systemctl enable --now docker
     usermod -aG docker ec2-user
     # kubectl
