@@ -7,12 +7,14 @@ Each PR adds one line to CHANGES.rst on its own branch. Uses the active `gh` log
 """
 import argparse
 import subprocess
+import threading
 import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 
 REPO = "anthonyzhao27/flask"
+_wt_lock = threading.Lock()  # git worktree add is not safe to run concurrently in one repo
 
 
 def sh(*a, cwd=None, check=True):
@@ -21,7 +23,8 @@ def sh(*a, cwd=None, check=True):
 
 def open_one(work: str, i: int, stamp: str) -> str:
     br = f"burst/{stamp}-{i:02d}"
-    sh("git", "worktree", "add", "-q", "-b", br, f"{work}/wt{i}", "origin/main", cwd=work)
+    with _wt_lock:
+        sh("git", "worktree", "add", "-q", "-b", br, f"{work}/wt{i}", "origin/main", cwd=work)
     wt = f"{work}/wt{i}"
     with open(f"{wt}/CHANGES.rst", "a") as f:
         f.write(f"\n.. burst {stamp} #{i}\n")
