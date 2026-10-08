@@ -69,7 +69,9 @@ Cut to numbers slide.
 Eval run 1 (gpt-6-astra @ high, judge gpt-6-luna): full = 35/35 strict, 34/35 semantic, FP 0/20; diff_only = 34/35 strict, 34/35 semantic, FP 0/20. One equivalent mutant excluded. Noisy v2 (bug inside a real 2-6 file upstream diff, n=11): full 10/11, diff_only 11/11 strict (10/11 semantic). Configs indistinguishable at this n.
 Guided (full + 44 mined guidelines): 45/46, FP 0/20, +3.6k tokens/PR, identical to full. Combined over all 46 bugs: full 97.8%, diff_only 97.8%, guided 97.8%; FP 0/20 for all three.
 Cost: ~$0.04–0.06 tokens per average review, $0.21 for a 19k-token one; compute $0.00004; idle pool of 4 = $0.16/hr.
-Karpenter: pool 4→16, node Ready in 41s, 16 runners in 49s. Spot blocked by a missing service-linked role on a fresh account (fixed).
+Agentic (grep/read_file/list_dir, 15 calls): 45/46 strict, 43/46 semantic, 24k tokens/PR ($0.26) vs 11k ($0.11) for full, p50 145s vs 58s. Exploration = pure cost on this corpus.
+Four-way: diff_only ≈ full ≈ guided ≈ agentic on recall (97.8% strict); they differ only in cost/latency.
+Karpenter: pool 4→16, node Ready in 41s, 16 runners in 49s; spot c7g.2xlarge after creating the Spot service-linked role. Drain mid-task: lost pod detected, task requeued, posted on attempt 2 (50s), 0 failed.
 Tokens: ~4k in / 0.4k out per review. 112 reviews ≈ 0.45M input tokens.
 
 Talking points from these: under burst, the runner is never the bottleneck (4s); queue wait (cap) and the LLM stage are. Pool N > cap M removes the refill wait; a separate LLM concurrency knob removes the review backlog. Cold vs warm matters most at the *first* wave; after that it is a throughput question.
