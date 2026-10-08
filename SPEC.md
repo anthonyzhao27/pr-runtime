@@ -85,7 +85,7 @@ API Gateway (HTTP API) ──► SQS  pr-runtime-tasks  (+ DLQ)
 ## 3. Components
 
 ### 3.1 `infra/` (Terraform)
-- VPC (2 AZs, private subnets for nodes, NAT), EKS cluster (1.31+), managed node group: 2× `m7g.large` on-demand → grows to 3 when quota lands.
+- VPC (2 AZs, private subnets for nodes, NAT), EKS cluster (1.31+), managed node group: 3× `m7g.large` on-demand.
 - SQS queue + DLQ. API Gateway HTTP API with SQS integration (`SendMessage`), forwards `X-Hub-Signature-256` as a message attribute.
 - IRSA roles: `controller` (sqs:ReceiveMessage/DeleteMessage), `runner` (none; no SA token mounted).
 - EKS addon: VPC CNI with network policy enabled. Helm releases via Terraform `helm_release`: kube-prometheus-stack, KEDA (baseline only).
@@ -187,7 +187,7 @@ Stretch items are *not* on this schedule. They happen only if a day finishes ear
 
 ## 7. Known constraints and gotchas
 
-- **EC2 on-demand vCPU quota is 5 in us-east-1.** Increase to 32 requested Oct 7 (request `9c866f461a7d420e8c3cc67bea590b15sI75Z0QF`). Until approved: 2× `m7g.large` = 4 vCPU. Pool N=3, cap M=3. Spot quota is also 5.
+- **EC2 on-demand vCPU quota is 5 in us-east-1.** Requested 32 on Oct 7, **granted 64** same day. Resolved. Spot quota still 5.
 - **AWS profile `personal` uses root credentials.** Works, but should be an IAM user with admin + MFA. Not blocking; flagged.
 - **Laptop is arm64.** Nodes are Graviton (arm64) so images build natively. If x86 ever needed: `docker buildx --platform linux/amd64`.
 - **Free-token OpenAI org rate limits** unknown. Eval = ~50 PRs × 2 configs × ~20k tokens ≈ 2M tokens at concurrency ≤4. Verify limits Oct 10 before eval day.
