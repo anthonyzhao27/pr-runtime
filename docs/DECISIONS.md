@@ -10,3 +10,9 @@ Laptop is arm64 (Docker 28, aarch64). Cross-building for amd64 adds minutes per 
 
 ## 2026-10-07 — Root credentials in the `personal` profile
 `aws sts get-caller-identity` returns the account root. Works, but should be an IAM user with admin + MFA. Flagged, not blocking.
+
+## 2026-10-07 — Flask's test suite takes 1.1 seconds, not 30
+494 tests, 1.14s locally; `uv sync` of test deps ~1.5s warm, ruff 0.3s. The "expensive" part of a task is not the tests. It is image pull + clone + dependency install, i.e. everything the warm pool pre-pays. Good for the thesis, bad for a dramatic demo: pytest will not be the visible wait. Expect the LLM call to dominate the warm path.
+
+## 2026-10-07 — Read-only root filesystem vs a baked-in clone
+The clone is baked into the image at `/opt/seed/flask`. With `readOnlyRootFilesystem: true` the runner cannot write there, so on boot it `copytree`s the seed into the `/work` emptyDir and does all git/uv work there. Cost: one copy per pod (~hundreds of ms, measured in `warm_seconds`). Alternative was dropping the read-only root, rejected: it is the cheapest hardening we have.
