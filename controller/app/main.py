@@ -7,9 +7,9 @@ import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from prometheus_client import make_asgi_app
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from . import events
 from .api import router
@@ -42,7 +42,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="pr-runtime controller", lifespan=lifespan)
 app.include_router(router)
-app.mount("/metrics", make_asgi_app())
+
+
+@app.get("/metrics")
+def metrics_endpoint():
+    # Explicit route: a Mount would lose to the SPA catch-all for the bare /metrics path.
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.post("/result/{task_id}")
