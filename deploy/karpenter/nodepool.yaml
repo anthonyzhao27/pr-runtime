@@ -1,0 +1,61 @@
+# Karpenter node class + pool for burst runners. Graviton only (images are arm64), spot preferred,
+# on-demand fallback. Consolidation returns nodes within a minute of going idle.
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: runner-arm64
+spec:
+  amiSelectorTerms:
+    - alias: al2023@latest
+  role: pr-runtime-karpenter-node
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: pr-runtime
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: pr-runtime
+  metadataOptions:
+    httpPutResponseHopLimit: 1   # pods cannot reach IMDS (runner has no node credentials)
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 40Gi
+        volumeType: gp3
+        deleteOnTermination: true
+  tags:
+    Project: pr-runtime
+    ManagedBy: karpenter
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: runner-burst
+spec:
+  template:
+    metadata:
+      labels:
+        pr-runtime/pool: burst
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: runner-arm64
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["arm64"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot", "on-demand"]
+        - key: karpenter.k8s.aws/instance-family
+          operator: In
+          values: ["m7g", "c7g", "r7g", "m8g", "c8g"]
+        - key: karpenter.k8s.aws/instance-size
+          operator: In
+          values: ["large", "xlarge", "2xlarge"]
+      expireAfter: 24h
+  limits:
+    cpu: "32"
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 60s

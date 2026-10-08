@@ -117,11 +117,16 @@ class Scheduler:
                 to_assign.append((task_id, pod))
 
             expired = [tid for tid, b in self.busy.items() if nowt > b["deadline"]]
+            # Node loss / eviction: a busy pod that no longer exists will never report. Requeue now, not at the deadline.
+            live = {p["name"] for p in self.pods.list_all()}
+            lost = [tid for tid, b in self.busy.items() if b["pod"] not in live and nowt - b["assigned_at"] > 5]
 
         for task_id, pod in to_assign:
             self._assign(task_id, pod)
         for tid in expired:
             self._expire(tid)
+        for tid in lost:
+            self._expire(tid, reason="runner pod disappeared (node loss or eviction)")
 
     def _assign(self, task_id: str, pod: dict) -> None:
         age = (dt.datetime.now(dt.timezone.utc) - pod["started"]).total_seconds()
@@ -159,28 +164,29 @@ class Scheduler:
                  snapshot["priority"], pod["name"], "cold" if cold else "warm", waited)
         events.publish("task.updated", snapshot)
 
-    def _expire(self, task_id: str) -> None:
+    def _expire(self, task_id: str, reason: str = "deadline exceeded") -> None:
         with self.lock:
             b = self.busy.pop(task_id, None)
         if not b:
             return
         self.pods.delete(b["pod"])
         self.assigned_pods.discard(b["pod"])
+        metrics.tasks_lost.labels(reason="deadline" if reason.startswith("deadline") else "pod_lost").inc()
         with SessionLocal() as s:
             t = s.get(Task, task_id)
             if t is None:
                 return
-            if t.attempts < 2:
+            if t.attempts < 3:
                 t.state = "queued"
-                t.error = f"deadline exceeded on {b['pod']}; requeued"
+                t.error = f"{reason} on {b['pod']}; requeued (attempt {t.attempts})"
                 s.commit()
                 self.enqueue(t.id, t.priority)
             else:
                 t.state = "failed"
-                t.error = f"deadline exceeded twice (last {b['pod']})"
+                t.error = f"{reason}; gave up after {t.attempts} attempts (last {b['pod']})"
                 s.commit()
                 metrics.tasks_total.labels(state="failed").inc()
-            log.warning("task %s expired on %s", task_id, b["pod"])
+            log.warning("task %s: %s on %s", task_id, reason, b["pod"])
             events.publish("task.updated", t.to_dict())
 
     # ---- results ----------------------------------------------------------------------------

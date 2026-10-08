@@ -15,3 +15,4 @@ wait_for_runner = Histogram("prr_wait_for_runner_seconds", "Admitted -> assigned
 cold_assignments = Counter("prr_cold_assignments_total", "Tasks assigned to a runner that was not warm (pod younger than 10s)")
 llm_tokens = Counter("prr_llm_tokens_total", "Tokens used by the reviewer", ["direction"])
 cost_usd = Counter("prr_cost_usd_total", "Accumulated cost in USD", ["kind"])  # compute | tokens
+tasks_lost = Counter("prr_tasks_lost_total", "Busy tasks requeued because the runner died or timed out", ["reason"])

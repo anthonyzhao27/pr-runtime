@@ -35,6 +35,11 @@ class RunnerPods:
             out.append({"name": p.metadata.name, "ip": p.status.pod_ip, "started": started})
         return out
 
+    def list_all(self) -> list[dict]:
+        """Every runner pod that still exists (any phase), for lost-pod detection."""
+        pods = self.api.list_namespaced_pod(settings.namespace, label_selector=settings.runner_selector).items
+        return [{"name": p.metadata.name, "phase": p.status.phase} for p in pods]
+
     def delete(self, name: str) -> None:
         try:
             self.api.delete_namespaced_pod(name, settings.namespace, grace_period_seconds=0)
