@@ -51,6 +51,9 @@ spec:
       labels: { app: controller }
     spec:
       serviceAccountName: controller
+      # Stateful / control-plane pods stay on the fixed node group; only runners may land on Karpenter burst nodes.
+      nodeSelector:
+        pr-runtime/pool: general
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

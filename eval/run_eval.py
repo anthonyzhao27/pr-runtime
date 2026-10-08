@@ -41,7 +41,9 @@ def ensure_pr(entry: dict) -> int:
 
 def wait_posted(api: str, pr: int, config: str, since_iso: str, timeout: int = 900) -> dict | None:
     t0 = time.time()
-    while time.time() - t0 < timeout:
+    first = True
+    while first or time.time() - t0 < timeout:
+        first = False
         tasks = httpx.get(f"{api}/api/tasks", params={"pr": pr, "limit": 20}, timeout=20).json()
         for t in tasks:
             if t["config"] == config and t["created_at"] >= since_iso and t["state"] in ("posted", "failed"):
@@ -59,6 +61,8 @@ def main() -> None:
     ap.add_argument("--run-id", default=time.strftime("%Y%m%d-%H%M%S"))
     ap.add_argument("--corpus", default=str(HERE / "corpus" / "corpus.json"))
     ap.add_argument("--limit", type=int, help="first N entries only (smoke test)")
+    ap.add_argument("--accept-existing", action="store_true",
+                    help="for non-default configs, reuse an already-posted task for that PR+config instead of firing a rerun")
     a = ap.parse_args()
     CORPUS = json.loads(Path(a.corpus).read_text())
     configs = a.configs.split(",")
@@ -97,11 +101,19 @@ def main() -> None:
     for cfg in configs[1:]:
         mark = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
         todo = [e for e in entries if e["pr"] in firsts]
-        for e in todo:
+        existing: dict[int, dict] = {}
+        if a.accept_existing:
+            for e in todo:
+                t = wait_posted(a.api, e["pr"], cfg, "1970", timeout=0)
+                if t and t["state"] == "posted":
+                    existing[e["pr"]] = t
+            print(f"accepting {len(existing)} existing posted tasks for config {cfg}", file=sys.stderr)
+        fire = [e for e in todo if e["pr"] not in existing]
+        for e in fire:
             httpx.post(f"{a.api}/api/tasks/{firsts[e['pr']]['id']}/rerun", json={"config": cfg}, timeout=20)
-        print(f"fired {len(todo)} reruns for config {cfg}", file=sys.stderr)
+        print(f"fired {len(fire)} reruns for config {cfg}", file=sys.stderr)
         with ThreadPoolExecutor(8) as ex:
-            for e, t in zip(todo, ex.map(lambda e: wait_posted(a.api, e["pr"], cfg, mark), todo)):
+            for e, t in zip(todo, ex.map(lambda e: existing.get(e["pr"]) or wait_posted(a.api, e["pr"], cfg, mark), todo)):
                 if t is None:
                     print(f"  pr#{e['pr']} {e['branch']}: no result for {cfg}", file=sys.stderr)
                     continue
