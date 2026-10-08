@@ -140,8 +140,11 @@ def describe(kind: str, node: ast.AST, src_lines: list[str]) -> str:
 
 
 def run_tests(repo: str) -> bool:
-    p = subprocess.run(["uv", "run", "--no-sync", "pytest", "-q", "-x", "-p", "no:cacheprovider", "--tb=no"],
-                       cwd=repo, capture_output=True, text=True, timeout=600)
+    try:
+        p = subprocess.run(["uv", "run", "--no-sync", "pytest", "-q", "-x", "-p", "no:cacheprovider", "--tb=no"],
+                           cwd=repo, capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        return False  # a hang is a very dead mutant
     return p.returncode == 0
 
 
