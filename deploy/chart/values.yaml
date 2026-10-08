@@ -10,6 +10,7 @@ controller:
   taskDeadlineSeconds: 300
   reviewerModel: gpt-6-astra
   judgeModel: gpt-6-luna
+  reasoningEffort: high
   repo: anthonyzhao27/flask
   queueUrl: https://sqs.us-east-1.amazonaws.com/511572480852/pr-runtime-tasks
   postReviews: true

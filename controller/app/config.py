@@ -19,6 +19,7 @@ class Settings:
     openai_api_key: str = os.environ.get("OPENAI_API_KEY", "")
     reviewer_model: str = os.environ.get("REVIEWER_MODEL", "")
     judge_model: str = os.environ.get("JUDGE_MODEL", "")
+    reasoning_effort: str = os.environ.get("REASONING_EFFORT", "high")  # low | medium | high | xhigh
     default_config: str = os.environ.get("DEFAULT_CONFIG", "full")  # full | diff_only
     admission_cap: int = _int("ADMISSION_CAP", 4)
     task_deadline: int = _int("TASK_DEADLINE_SECONDS", 300)

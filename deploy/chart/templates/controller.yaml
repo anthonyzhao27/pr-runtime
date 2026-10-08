@@ -77,6 +77,8 @@ spec:
               value: {{ .Values.controller.reviewerModel | quote }}
             - name: JUDGE_MODEL
               value: {{ .Values.controller.judgeModel | quote }}
+            - name: REASONING_EFFORT
+              value: {{ .Values.controller.reasoningEffort | default "high" | quote }}
             - name: POST_REVIEWS
               value: {{ .Values.controller.postReviews | quote }}
             - name: DATABASE_URL

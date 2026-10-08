@@ -104,6 +104,7 @@ def review(task: Task) -> dict:
             model=model,
             input=input_items,
             tools=tools,
+            reasoning={"effort": settings.reasoning_effort},
             text={"format": {"type": "json_schema", **SCHEMA}},
         )
         if resp.usage:
@@ -132,5 +133,5 @@ def review(task: Task) -> dict:
         log.error("reviewer returned non-JSON: %s", resp.output_text[:500])
         parsed = {"verdict": "REQUEST_CHANGES", "summary": "reviewer output unparseable", "findings": []}
 
-    return {**parsed, "model": model, "tokens_in": tokens_in, "tokens_out": tokens_out,
+    return {**parsed, "model": f"{model} (effort={settings.reasoning_effort})", "tokens_in": tokens_in, "tokens_out": tokens_out,
             "tool_calls": tool_calls, "seconds": time.monotonic() - t0}
