@@ -37,6 +37,12 @@ def post_review(repo: str, pr_number: int, head_sha: str, verdict: str, body: st
     event = {"APPROVE": "APPROVE", "REQUEST_CHANGES": "REQUEST_CHANGES"}.get(verdict, "COMMENT")
     payload = {"commit_id": head_sha, "body": body, "event": event, "comments": comments}
     r = httpx.post(f"{API}/repos/{repo}/pulls/{pr_number}/reviews", headers=_headers(), json=payload, timeout=30)
+    if r.status_code == 422 and "own pull request" in r.text and event != "COMMENT":
+        # GitHub refuses APPROVE/REQUEST_CHANGES from the PR author. Same identity = comment with the verdict in the body.
+        log.info("self-review on #%s; downgrading %s to COMMENT", pr_number, event)
+        payload["event"] = "COMMENT"
+        payload["body"] = f"**Verdict: {verdict}**\n\n{body}"
+        r = httpx.post(f"{API}/repos/{repo}/pulls/{pr_number}/reviews", headers=_headers(), json=payload, timeout=30)
     if r.status_code == 422 and comments:
         # Usually a comment on a line outside the diff. Retry without inline comments so the verdict still lands.
         log.warning("review 422 for #%s: %s; retrying without inline comments", pr_number, r.text[:300])
