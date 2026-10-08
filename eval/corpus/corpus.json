@@ -1,0 +1,741 @@
+[
+  {
+    "kind": "bug",
+    "variant": "red",
+    "branch": "bug/7203feab-red",
+    "upstream_fix": "7203feabf723edae0286ae5dc64fec8ac4c91735",
+    "upstream_msg": "Fix IPv6 server name parsing",
+    "tests_pass": false,
+    "pytest_tail": "================================= FAILURES ===================================\nE   ValueError: invalid literal for int() with base 10: ':1]:8080'\n/private/tmp/claude-501/-Users-anthonyzhao/21c5b716-944e-46ea-b529-7cd64fd99d6f/scratchpad/flask/src/flask/app.py:732: ValueError: invalid literal for int() with base 10: ':1]:8080'\n=========================== short test summary info ============================\nFAILED tests/test_basic.py::test_run_from_config[None-None-[::1]:8080-::1-8080]\n!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!\n1 failed, 154 passed in 0.55s\n",
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 14,
+        "end": 14
+      },
+      {
+        "path": "src/flask/app.py",
+        "start": 721,
+        "end": 721
+      },
+      {
+        "path": "src/flask/app.py",
+        "start": 731,
+        "end": 732
+      },
+      {
+        "path": "src/flask/app.py",
+        "start": 745,
+        "end": 745
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "branch": "bug/7203feab-green",
+    "upstream_fix": "7203feabf723edae0286ae5dc64fec8ac4c91735",
+    "upstream_msg": "Fix IPv6 server name parsing",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 14,
+        "end": 14
+      },
+      {
+        "path": "src/flask/app.py",
+        "start": 721,
+        "end": 721
+      },
+      {
+        "path": "src/flask/app.py",
+        "start": 731,
+        "end": 732
+      },
+      {
+        "path": "src/flask/app.py",
+        "start": 745,
+        "end": 745
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "red",
+    "branch": "bug/de8429ff-red",
+    "upstream_fix": "de8429ffda8cfb54db175529e2bae72a24e1fa7e",
+    "upstream_msg": "Fix IPv6 session transactions",
+    "tests_pass": false,
+    "pytest_tail": ".........F\n=================================== FAILURES ===================================\nE   AssertionError: assert 'None' == '42'\n      \n      - 42\n      + None\n/private/tmp/claude-501/-Users-anthonyzhao/21c5b716-944e-46ea-b529-7cd64fd99d6f/scratchpad/flask/tests/test_testing.py:185: AssertionError: assert 'None' == '42'\n=========================== short test summary info ============================\nFAILED tests/test_testing.py::test_session_transaction_ipv6 - AssertionError:...\n!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!\n1 failed, 455 passed in 0.73s\n",
+    "hunks": [
+      {
+        "path": "src/flask/testing.py",
+        "start": 180,
+        "end": 180
+      }
+    ],
+    "src_files": [
+      "src/flask/testing.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "branch": "bug/de8429ff-green",
+    "upstream_fix": "de8429ffda8cfb54db175529e2bae72a24e1fa7e",
+    "upstream_msg": "Fix IPv6 session transactions",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/testing.py",
+        "start": 180,
+        "end": 180
+      }
+    ],
+    "src_files": [
+      "src/flask/testing.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "red",
+    "branch": "bug/e82db2ca-red",
+    "upstream_fix": "e82db2ca3a22c9614c1987392c9cfaa8c6ce99ad",
+    "upstream_msg": "fix provide_automatic_options override",
+    "tests_pass": false,
+    "pytest_tail": "====\nE   AssertionError: assert HeaderSet(['HEAD', 'GET']) == {'GET', 'HEAD', 'OPTIONS'}\n      \n      Use -v to get more diff\n/private/tmp/claude-501/-Users-anthonyzhao/21c5b716-944e-46ea-b529-7cd64fd99d6f/scratchpad/flask/tests/test_basic.py:103: AssertionError: assert HeaderSet(['HEAD', 'GET']) == {'GET', 'HEAD', 'OPTIONS'}\n=========================== short test summary info ============================\nFAILED tests/test_basic.py::test_provide_automatic_options_attr_enable - Asse...\n!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!\n1 failed, 33 passed in 0.14s\n",
+    "hunks": [
+      {
+        "path": "src/flask/sansio/app.py",
+        "start": 634,
+        "end": 635
+      },
+      {
+        "path": "src/flask/sansio/app.py",
+        "start": 641,
+        "end": 646
+      }
+    ],
+    "src_files": [
+      "src/flask/sansio/app.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "red",
+    "branch": "bug/fb541598-red",
+    "upstream_fix": "fb54159861708558b5f5658ebdc14709d984361c",
+    "upstream_msg": "secret key rotation: fix key list ordering",
+    "tests_pass": false,
+    "pytest_tail": "URES ===================================\nE   AssertionError: assert {'a': 1} == {}\n      \n      Left contains 1 more item:\n      {'a': 1}\n      Use -v to get more diff\n/private/tmp/claude-501/-Users-anthonyzhao/21c5b716-944e-46ea-b529-7cd64fd99d6f/scratchpad/flask/tests/test_basic.py:415: AssertionError: assert {'a': 1} == {}\n=========================== short test summary info ============================\nFAILED tests/test_basic.py::test_session_secret_key_fallbacks - AssertionErro...\n!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!\n1 failed, 47 passed in 0.14s\n",
+    "hunks": [
+      {
+        "path": "src/flask/sessions.py",
+        "start": 307,
+        "end": 307
+      },
+      {
+        "path": "src/flask/sessions.py",
+        "start": 311,
+        "end": 311
+      }
+    ],
+    "src_files": [
+      "src/flask/sessions.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "branch": "bug/fb541598-green",
+    "upstream_fix": "fb54159861708558b5f5658ebdc14709d984361c",
+    "upstream_msg": "secret key rotation: fix key list ordering",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/sessions.py",
+        "start": 307,
+        "end": 307
+      },
+      {
+        "path": "src/flask/sessions.py",
+        "start": 311,
+        "end": 311
+      }
+    ],
+    "src_files": [
+      "src/flask/sessions.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "branch": "bug/da600394-red",
+    "upstream_fix": "da600394865c06a4772c433c1a560453dcf4f868",
+    "upstream_msg": "Handle help arg by itself the same as no args",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 679,
+        "end": 679
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "branch": "bug/98ae7189-red",
+    "upstream_fix": "98ae71897600a3162f529b1b30c70b8abdf0961b",
+    "upstream_msg": "fix mypy finding",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 1362,
+        "end": 1362
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "branch": "bug/eb1182a1-red",
+    "upstream_fix": "eb1182a10e757b5e76009c69fdf3a88a5afc6840",
+    "upstream_msg": "fix mypy finding",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/sessions.py",
+        "start": 373,
+        "end": 373
+      },
+      {
+        "path": "src/flask/sessions.py",
+        "start": 376,
+        "end": 376
+      }
+    ],
+    "src_files": [
+      "src/flask/sessions.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "branch": "bug/a363642a-red",
+    "upstream_fix": "a363642a32880114c7944b1017f2f69bd4cc00eb",
+    "upstream_msg": "fix mypy finding with new werkzeug endpoint type",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/wrappers.py",
+        "start": 157,
+        "end": 157
+      }
+    ],
+    "src_files": [
+      "src/flask/wrappers.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "branch": "bug/1d5abfad-red",
+    "upstream_fix": "1d5abfadd7132c9a78e14e5ba6c07aed47115280",
+    "upstream_msg": "Fixing issue 5342: 'The double quote is missing in the string'",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 850,
+        "end": 850
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/d318b683",
+    "base_branch": "clean-base/d318b683",
+    "upstream_commit": "d318b683471101618febed18996405ad26462110",
+    "upstream_msg": "explain seek",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/helpers.py",
+        "start": 448,
+        "end": 449
+      }
+    ],
+    "src_files": [
+      "src/flask/helpers.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/2a8a38b0",
+    "base_branch": "clean-base/2a8a38b0",
+    "upstream_commit": "2a8a38b051fc248865730bf3511bf2e2ea325e81",
+    "upstream_msg": "support query in methodview",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/views.py",
+        "start": 12,
+        "end": 12
+      }
+    ],
+    "src_files": [
+      "src/flask/views.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/a29f88ce",
+    "base_branch": "clean-base/a29f88ce",
+    "upstream_commit": "a29f88ce6f2f9843bd6fcbbfce1390a2071965d6",
+    "upstream_msg": "document that headers must be set before streaming",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/ctx.py",
+        "start": 155,
+        "end": 157
+      },
+      {
+        "path": "src/flask/ctx.py",
+        "start": 159,
+        "end": 175
+      },
+      {
+        "path": "src/flask/helpers.py",
+        "start": 71,
+        "end": 82
+      }
+    ],
+    "src_files": [
+      "src/flask/ctx.py",
+      "src/flask/helpers.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/a411a243",
+    "base_branch": "clean-base/a411a243",
+    "upstream_commit": "a411a2434b09d9cbaa4074232b2c247d591bb655",
+    "upstream_msg": "add back opening session on context push",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/ctx.py",
+        "start": 381,
+        "end": 382
+      },
+      {
+        "path": "src/flask/ctx.py",
+        "start": 392,
+        "end": 392
+      },
+      {
+        "path": "src/flask/ctx.py",
+        "start": 395,
+        "end": 404
+      },
+      {
+        "path": "src/flask/ctx.py",
+        "start": 436,
+        "end": 444
+      }
+    ],
+    "src_files": [
+      "src/flask/ctx.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/dbd4c288",
+    "base_branch": "clean-base/dbd4c288",
+    "upstream_commit": "dbd4c2882593f6118103120aa96fa9acdf7deedb",
+    "upstream_msg": "Changed the static annotated type of select_jinja_autoescape method in src/flask/sansio/app.py",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/sansio/app.py",
+        "start": 534,
+        "end": 534
+      }
+    ],
+    "src_files": [
+      "src/flask/sansio/app.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/d44f1c65",
+    "base_branch": "clean-base/d44f1c65",
+    "upstream_commit": "d44f1c65239c3e33509224aa1931631243dbfa7f",
+    "upstream_msg": "relax type hint for bytes io",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/helpers.py",
+        "start": 418,
+        "end": 418
+      }
+    ],
+    "src_files": [
+      "src/flask/helpers.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/6c44dd4b",
+    "base_branch": "clean-base/6c44dd4b",
+    "upstream_commit": "6c44dd4bb8e4f2ca5f135f172de4725b2cada155",
+    "upstream_msg": "update helpers.send_from_directory docstring (#5599)",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/helpers.py",
+        "start": 567,
+        "end": 568
+      }
+    ],
+    "src_files": [
+      "src/flask/helpers.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/c7da8c2a",
+    "base_branch": "clean-base/c7da8c2a",
+    "upstream_commit": "c7da8c2aa3a923fc620ad480a8831a8a0f21ab37",
+    "upstream_msg": "Added python type annotation and return type.",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/sansio/app.py",
+        "start": 292,
+        "end": 292
+      }
+    ],
+    "src_files": [
+      "src/flask/sansio/app.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/5fdce4c3",
+    "base_branch": "clean-base/5fdce4c3",
+    "upstream_commit": "5fdce4c331ac530280cc941179d364a07f4a1088",
+    "upstream_msg": "Don't set the cli attribute in the sansio scaffold",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 334,
+        "end": 343
+      },
+      {
+        "path": "src/flask/blueprints.py",
+        "start": 7,
+        "end": 7
+      },
+      {
+        "path": "src/flask/blueprints.py",
+        "start": 12,
+        "end": 12
+      },
+      {
+        "path": "src/flask/blueprints.py",
+        "start": 19,
+        "end": 54
+      },
+      {
+        "path": "src/flask/sansio/app.py",
+        "start": 410,
+        "end": 410
+      },
+      {
+        "path": "src/flask/sansio/scaffold.py",
+        "start": 10,
+        "end": 10
+      },
+      {
+        "path": "src/flask/sansio/scaffold.py",
+        "start": 17,
+        "end": 17
+      },
+      {
+        "path": "src/flask/sansio/scaffold.py",
+        "start": 21,
+        "end": 23
+      },
+      {
+        "path": "src/flask/sansio/scaffold.py",
+        "start": 70,
+        "end": 70
+      },
+      {
+        "path": "src/flask/sansio/scaffold.py",
+        "start": 101,
+        "end": 101
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py",
+      "src/flask/blueprints.py",
+      "src/flask/sansio/app.py",
+      "src/flask/sansio/scaffold.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/65271c10",
+    "base_branch": "clean-base/65271c10",
+    "upstream_commit": "65271c105f7c247ecffc9a7121815276e092bd10",
+    "upstream_msg": "Remove print left in by accident",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 545,
+        "end": 545
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/cc80a47f",
+    "base_branch": "clean-base/cc80a47f",
+    "upstream_commit": "cc80a47f5be6c60e53c42ef9378e6db3b0e183b1",
+    "upstream_msg": "Widen the response typing",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/typing.py",
+        "start": 9,
+        "end": 9
+      }
+    ],
+    "src_files": [
+      "src/flask/typing.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/17e146ad",
+    "base_branch": "clean-base/17e146ad",
+    "upstream_commit": "17e146ad949b3d80438faf95e81b53c543cb50f5",
+    "upstream_msg": "Pass maxsplit via kwarg to re.split",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 346,
+        "end": 346
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/8705dd39",
+    "base_branch": "clean-base/8705dd39",
+    "upstream_commit": "8705dd39c4fa563ea0fe0bf84c85da8fcc98b88d",
+    "upstream_msg": "set `Vary: Cookie` header consistently for session",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/sessions.py",
+        "start": 348,
+        "end": 351
+      },
+      {
+        "path": "src/flask/sessions.py",
+        "start": 365,
+        "end": 365
+      },
+      {
+        "path": "src/flask/sessions.py",
+        "start": 368,
+        "end": 368
+      },
+      {
+        "path": "src/flask/sessions.py",
+        "start": 385,
+        "end": 385
+      }
+    ],
+    "src_files": [
+      "src/flask/sessions.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/a7487701",
+    "base_branch": "clean-base/a7487701",
+    "upstream_commit": "a7487701999fee55bb76a393e72c96ac8e277fcf",
+    "upstream_msg": "clarify `View.as_view` docstring",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/views.py",
+        "start": 98,
+        "end": 99
+      }
+    ],
+    "src_files": [
+      "src/flask/views.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/e3df2337",
+    "base_branch": "clean-base/e3df2337",
+    "upstream_commit": "e3df23374cdb9342a823556170c53c9d987d0d33",
+    "upstream_msg": "remove env from shell banner",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 1012,
+        "end": 1012
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/72cae9ce",
+    "base_branch": "clean-base/72cae9ce",
+    "upstream_commit": "72cae9ce2b6a5a296b7328df8dd73240e14718e6",
+    "upstream_msg": "Remove extra backtick",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/sansio/scaffold.py",
+        "start": 111,
+        "end": 111
+      }
+    ],
+    "src_files": [
+      "src/flask/sansio/scaffold.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/5050a18a",
+    "base_branch": "clean-base/5050a18a",
+    "upstream_commit": "5050a18a0057df4cda6f6b00483d12d29cb59239",
+    "upstream_msg": "evaluate --cert before --key",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 885,
+        "end": 888
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/25ab05e6",
+    "base_branch": "clean-base/25ab05e6",
+    "upstream_commit": "25ab05e6a2ae248ab76002807d47c23952492f17",
+    "upstream_msg": "remove old note about InternalServerError",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 913,
+        "end": 913
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/eb42655c",
+    "base_branch": "clean-base/eb42655c",
+    "upstream_commit": "eb42655c46f8a598f2e0ead624ba5a65a8a66e90",
+    "upstream_msg": "simplify BadRequestKeyError.show_exception",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 882,
+        "end": 885
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py"
+    ]
+  },
+  {
+    "kind": "clean",
+    "variant": "clean",
+    "branch": "clean/cf3089a8",
+    "base_branch": "clean-base/cf3089a8",
+    "upstream_commit": "cf3089a8f82d50430da4cbe690c1ef11d30241ec",
+    "upstream_msg": "Discover app factory deterministically",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 67,
+        "end": 67
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ]
+  }
+]
