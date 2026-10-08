@@ -7,7 +7,7 @@ import time
 
 from openai import OpenAI
 
-from . import github
+from . import github, repo as repo_tools
 from .config import settings
 from .db import Task
 
@@ -65,6 +65,37 @@ READ_FILE_TOOL = {
 }
 
 
+AGENT_TOOLS = [
+    READ_FILE_TOOL,
+    {"type": "function", "name": "grep", "strict": True,
+     "description": "Search the repository at the PR head for a regex (git grep -n). Use to find callers, definitions, tests.",
+     "parameters": {"type": "object", "additionalProperties": False,
+                    "properties": {"pattern": {"type": "string"}, "path_glob": {"type": "string", "description": "optional pathspec, e.g. 'src/flask/*.py' or '' for all"}},
+                    "required": ["pattern", "path_glob"]}},
+    {"type": "function", "name": "list_dir", "strict": True,
+     "description": "List a directory at the PR head.",
+     "parameters": {"type": "object", "additionalProperties": False,
+                    "properties": {"path": {"type": "string", "description": "repository-relative directory, '' for root"}},
+                    "required": ["path"]}},
+]
+
+AGENT_SYSTEM_SUFFIX = """
+You may explore the repository with read_file, grep and list_dir (up to the tool budget). Use them to check callers and
+tests of anything the diff changes: a change can be locally reasonable and still break a caller elsewhere. Stop exploring
+as soon as you can justify a verdict."""
+
+
+def _run_tool(task: Task, name: str, args: dict) -> str:
+    if name == "read_file":
+        path = args.get("path", "")
+        return (task.files or {}).get(path) or repo_tools.read_file(task.repo, task.head_sha, path)
+    if name == "grep":
+        return repo_tools.grep(task.repo, task.head_sha, args.get("pattern", ""), args.get("path_glob", ""))
+    if name == "list_dir":
+        return repo_tools.list_dir(task.repo, task.head_sha, args.get("path", ""))
+    return f"error: unknown tool {name}"
+
+
 def _clip(s: str | None, n: int) -> str:
     s = s or ""
     return s if len(s) <= n else s[:n] + f"\n... [{len(s) - n} chars truncated]"
@@ -115,11 +146,13 @@ def review(task: Task) -> dict:
     t0 = time.monotonic()
     tokens_in = tokens_out = tool_calls = 0
 
+    agentic = task.config == "agentic"
     input_items: list = [
-        {"role": "system", "content": SYSTEM},
+        {"role": "system", "content": SYSTEM + (AGENT_SYSTEM_SUFFIX if agentic else "")},
         {"role": "user", "content": build_prompt(task)},
     ]
-    tools = [READ_FILE_TOOL] if task.config != "diff_only" else []
+    tools = AGENT_TOOLS if agentic else ([READ_FILE_TOOL] if task.config != "diff_only" else [])
+    budget = settings.agent_max_tool_calls if agentic else settings.read_file_max_calls
 
     while True:
         resp = client.responses.create(
@@ -134,19 +167,21 @@ def review(task: Task) -> dict:
             tokens_out += resp.usage.output_tokens or 0
 
         calls = [o for o in resp.output if getattr(o, "type", "") == "function_call"]
-        if not calls or tool_calls >= settings.read_file_max_calls:
+        if not calls or tool_calls >= budget:
             break
         input_items += resp.output
         for c in calls:
             tool_calls += 1
-            path = json.loads(c.arguments).get("path", "")
-            content = (task.files or {}).get(path) or github.get_file(task.repo, path, task.head_sha)
-            input_items.append({
-                "type": "function_call_output",
-                "call_id": c.call_id,
-                "output": _clip(content, 40_000) if content else f"error: {path} not found at {task.head_sha[:10]}",
-            })
-            if tool_calls >= settings.read_file_max_calls:
+            try:
+                args = json.loads(c.arguments or "{}")
+            except json.JSONDecodeError:
+                args = {}
+            try:
+                out = _run_tool(task, c.name, args)
+            except Exception as e:  # noqa: BLE001
+                out = f"error: {e!r}"
+            input_items.append({"type": "function_call_output", "call_id": c.call_id, "output": _clip(out, 40_000)})
+            if tool_calls >= budget:
                 tools = []  # last round: force an answer
 
     try:

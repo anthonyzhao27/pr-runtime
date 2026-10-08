@@ -30,6 +30,7 @@ class Settings:
     post_reviews: bool = os.environ.get("POST_REVIEWS", "true").lower() == "true"
     dev: bool = os.environ.get("DEV", "0") == "1"
     read_file_max_calls: int = _int("READ_FILE_MAX_CALLS", 5)
+    agent_max_tool_calls: int = _int("AGENT_MAX_TOOL_CALLS", 15)
     ignore_actions: tuple[str, ...] = field(default_factory=lambda: ("closed",))
     # Cost model (S5). Prices are USD per 1M tokens; node price USD/hour; a runner is charged its CPU-limit share of a node.
     price_input_per_m: float = float(os.environ.get("PRICE_INPUT_PER_M", "10.0"))    # gpt-6-astra standard tier

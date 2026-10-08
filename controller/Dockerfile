@@ -9,6 +9,8 @@ RUN npx vite build --outDir /out --emptyOutDir
 
 # Stage 2: controller
 FROM python:3.12-slim-bookworm
+# git: read-only bare mirror for the reviewer's grep/read_file/list_dir tools (S2). Nothing from a PR is executed here.
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
 WORKDIR /app
 COPY controller/pyproject.toml ./
