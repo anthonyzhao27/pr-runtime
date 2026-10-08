@@ -17,7 +17,7 @@ kubectl -n pr-runtime port-forward svc/controller 18000:8000   # in another shel
 npm run dev                                                      # http://localhost:5173
 ```
 
-`vite.config.ts` proxies `/api` and `/eval` to `http://localhost:18000`.
+`vite.config.ts` proxies `/api` and `/eval/results` to `http://localhost:18000`; set `PR_RUNTIME_API=http://host:port` to point elsewhere.
 
 ## Build
 

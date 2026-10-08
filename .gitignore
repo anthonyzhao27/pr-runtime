@@ -6,3 +6,5 @@ __pycache__/
 eval/results/
 .venv/
 .venv/
+controller/static/
+console/node_modules/

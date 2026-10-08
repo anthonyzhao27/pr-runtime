@@ -19,7 +19,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": { target: API, changeOrigin: true },
-      "/eval": { target: API, changeOrigin: true },
+      "/eval/results": { target: API, changeOrigin: true },
     },
   },
 });
