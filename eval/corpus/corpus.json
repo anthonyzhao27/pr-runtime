@@ -1099,7 +1099,9 @@
     ],
     "src_files": [
       "src/flask/cli.py"
-    ]
+    ],
+    "equivalent": true,
+    "note": "equivalent mutant: `elif len(matches) > 1` -> `>= 1` is unreachable-different after `if len(matches) == 1: return`; reviewer correctly APPROVEd"
   },
   {
     "kind": "bug",

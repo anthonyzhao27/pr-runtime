@@ -65,7 +65,8 @@ def main() -> None:
     rows = []
     for cfg in configs:
         rs = [r for r in raw if r["config"] == cfg and r["task"]["state"] == "posted"]
-        bugs = [r for r in rs if r["kind"] == "bug"]
+        bugs = [r for r in rs if r["kind"] == "bug" and not r.get("equivalent")]
+        equivalent = [r for r in rs if r["kind"] == "bug" and r.get("equivalent")]
         clean = [r for r in rs if r["kind"] == "clean"]
         for r in bugs:
             r["strict"] = strict_hit(r["task"], r["hunks"])
@@ -99,7 +100,7 @@ def main() -> None:
                                "flag_rate": rate([r["flagged"] for r in vs])}
         totals = [r["task"].get("timings", {}).get("total") for r in rs if r["task"].get("timings", {}).get("total")]
         summary["configs"][cfg] = {
-            "n_bugs": len(bugs), "n_clean": len(clean),
+            "n_bugs": len(bugs), "n_clean": len(clean), "n_equivalent_excluded": len(equivalent),
             "recall_strict": rate([r["strict"] for r in bugs]),
             "recall_semantic": rate([r["semantic"] for r in bugs]) if a.judge else None,
             "fp_rate": rate([r["task"].get("verdict") == "REQUEST_CHANGES" for r in clean]),

@@ -43,3 +43,14 @@ But the summary also said "the existing test covering this behavior was removed"
 
 ## 2026-10-07 — GitHub secondary rate limit on review creation
 21 of the first ~45 review posts failed with 403 (secondary rate limit: too many content-creating requests from one identity in a short window). Findings and verdicts were already in Postgres, so eval scoring was unaffected, but the PRs show no comment. Fix: a single posting lock with a 1.5s minimum gap between review creations and backoff honoring `Retry-After`. Circus's "128 agents" would hit this hard with one bot identity; a GitHub App gets per-installation limits.
+
+## 2026-10-07 — Eval run 1 (56 PRs × 2 configs, gpt-6-astra @ effort=high, judge gpt-6-luna)
+- **full** (diff + touched files + pytest/ruff): strict recall 35/36, semantic 35/36, FP 0/20, p50 time-to-comment 67s under a 56-PR burst (cap 4).
+- **diff_only**: strict 34/36, semantic 33/36, FP 0/20.
+- Historical bugs (IPv6 ×2, secret-key rotation, `--help`, provide_automatic_options): 8/8 both configs.
+- Tokens: mean 4.0k in / 0.4k out per review; 0.45M in total for 112 reviews. LLM p50 16.6s, p95 36.7s at high effort.
+Three lessons:
+1. **Ceiling effect.** Single-line mutations in a 2-line diff are easy; the diff alone is nearly enough. The two configs differ by one or two PRs, which is inside the noise of n=36. Hence the `noisy` variant: same mutant hidden inside a real 50-200 line upstream change.
+2. **One "miss" was the reviewer being right.** `elif len(matches) > 1` → `>= 1` after `if len(matches) == 1: return` is an equivalent mutant. The reviewer APPROVEd and explained exactly why. Marked `equivalent`, excluded from recall. Mutation-testing literature calls this the equivalent-mutant problem; it is why synthetic recall needs a human pass.
+3. **Judge disagreement.** The judge rejected one correct finding (SESSION_COOKIE_SECURE default flip, "breaks HTTP sessions") as not matching the defect description. Report strict and semantic side by side rather than trusting either alone.
+Also: 0 false positives on 20 real merged changes is suspicious in a good way; with a bigger clean set I'd expect some. Worth saying out loud rather than claiming perfection.

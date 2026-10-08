@@ -362,18 +362,6 @@
  {
   "config": "diff_only",
   "variant": "green",
-  "pr": 63,
-  "branch": "bug/mut-125246-green",
-  "strict": false,
-  "semantic": false,
-  "flagged": false,
-  "findings": 0,
-  "total_s": 163.817,
-  "upstream_msg": "synthetic: flip comparison operator in `elif len(matches) > 1:`"
- },
- {
-  "config": "diff_only",
-  "variant": "green",
   "pr": 62,
   "branch": "bug/mut-391767-green",
   "strict": true,
@@ -425,7 +413,7 @@
   "pr": 67,
   "branch": "bug/mut-033668-green",
   "strict": true,
-  "semantic": false,
+  "semantic": true,
   "flagged": true,
   "findings": 1,
   "total_s": 217.855,
@@ -857,7 +845,7 @@
   "pr": 47,
   "branch": "bug/mut-431893-green",
   "strict": true,
-  "semantic": true,
+  "semantic": false,
   "flagged": true,
   "findings": 2,
   "total_s": 112.353,
@@ -1030,18 +1018,6 @@
   "findings": 1,
   "total_s": 174.04,
   "upstream_msg": "synthetic: remove an early-return guard in `if is_running_from_reloader():`"
- },
- {
-  "config": "full",
-  "variant": "green",
-  "pr": 63,
-  "branch": "bug/mut-125246-green",
-  "strict": false,
-  "semantic": false,
-  "flagged": false,
-  "findings": 0,
-  "total_s": 174.294,
-  "upstream_msg": "synthetic: flip comparison operator in `elif len(matches) > 1:`"
  },
  {
   "config": "full",
