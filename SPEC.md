@@ -252,21 +252,21 @@ pr-runtime/
 
 ## 10. Stretch (only after §6 is green; in priority order)
 
-Each item is independently droppable. None are referenced by the core schedule.
+Each item is independently droppable. None are referenced by the core schedule. Status as of Oct 8: S1, S2, S3, S5, S9 done; S4, S6, S7, S8 not started.
 
-### S1. Mined per-directory guidelines ("compiled, not written") — ~half day
+### S1. Mined per-directory guidelines ("compiled, not written") — DONE 10/8 (44 rules from 743 upstream comments; `guided` config; no recall change on this corpus)
 Pull the last ~300 review comments from upstream `pallets/flask` PRs via the GitHub API. One LLM call per top-level directory: distill into ≤15 checkable rules, each tagged with the source PR URLs. Write `GUIDELINES.md` per directory; reviewer loads the ones for touched dirs. Adds a third ablation bar. Talk line: toy version of "3,744 standards, each traceable to its origin." Fallback: hand-write 10 rules and label the slide honestly.
 
-### S2. Agentic review loop — ~1 day
+### S2. Agentic review loop — DONE 10/8 (`agentic` config: read_file/grep/list_dir from a git mirror in the trusted controller, budget 15; cross-file corpus attempt was a negative result)
 Replace the single call + `read_file` with a bounded tool loop: `read_file`, `grep`, `list_dir`, `run_tests(path)` executed in the runner (requires keeping the runner alive until the LLM finishes, which changes the trust split: runner would need a controller-issued short-lived token to accept follow-up commands). Cap 15 tool calls / 3 min. Compare recall and latency against the single-call config as a fourth ablation bar. Talk line: when does exploration beat context stuffing.
 
-### S3. Karpenter instead of fixed node group — ~1 day
+### S3. Karpenter — DONE 10/8 (burst NodePool on top of the fixed floor; 4→16 runners in 49s; spot after creating the Spot service-linked role; lost-pod requeue in the scheduler)
 NodePool with Graviton on-demand + spot, consolidation on. Pool refill then also scales nodes under burst. Needs IRSA for Karpenter, interruption-queue handling, and a spot-interruption test (drain mid-pytest, task requeued). Talk line: preemption handling, same problem as Slurm spot nodes.
 
 ### S4. Dedicated bot identity polish — ~1 hour
 GitHub App instead of PAT: reviews appear as an app with an avatar; installation token per repo; webhook delivered by the App (drops the per-repo webhook script). Multi-repo becomes one install click.
 
-### S5. Cost model per PR — ~2 hours
+### S5. Cost model per PR — DONE 10/8 (compute vs tokens per task, standing pool $/hr, dashboard + console + scorer)
 Compute (node-seconds × price) + tokens (input/output × price) per PR, exported as a metric and a table in results. Talk line: "where does the money go: tests or tokens?"
 
 ### S6. gVisor runtime class — ~half day
@@ -278,5 +278,5 @@ Runner starts the Flask app from the PR branch and hits a few endpoints, attache
 ### S8. Multi-repo — ~half day
 Repo slug from webhook payload; runner image per repo or generic image with clone-on-boot (loses warm clone, measure the cost). Shows what the warm pool assumption actually buys.
 
-### S9. Secrets Manager + IRSA — ~30 min
+### S9. Secrets Manager + Pod Identity — DONE 10/8 (controller boots from `pr-runtime/app`; no k8s Secret mounted into it)
 Replace the k8s Secret with `secretsmanager:GetSecretValue` at controller boot via an IRSA role. Nothing secret ever on the laptop or in etcd. Talk line: "this is the prod answer; k8s Secret was the 6-day answer."
