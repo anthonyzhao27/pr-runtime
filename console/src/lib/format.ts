@@ -62,12 +62,12 @@ export function absTime(iso: string | null | undefined): string {
 export function taskTotalSeconds(t: Task, now = Date.now()): number | null {
   const tm = t.timings ?? {};
   if (typeof tm.total === "number") return tm.total;
-  const phases = ["prepare", "fetch", "checkout", "diff", "pytest", "ruff", "llm", "post"];
-  const sum = phases.reduce((acc, k) => acc + (typeof tm[k] === "number" ? tm[k] : 0), 0);
-  if (sum > 0) return sum;
+  // In flight: wall clock since admission (or creation while still queued) so the number ticks.
   if (t.state === "queued" || t.state === "running" || t.state === "reviewing") {
     const start = Date.parse(t.admitted_at ?? t.created_at);
-    if (!Number.isNaN(start)) return (now - start) / 1000;
+    if (!Number.isNaN(start)) return Math.max(0, (now - start) / 1000);
   }
-  return null;
+  const phases = ["prepare", "fetch", "checkout", "diff", "pytest", "ruff", "llm", "post"];
+  const sum = phases.reduce((acc, k) => acc + (typeof tm[k] === "number" ? tm[k] : 0), 0);
+  return sum > 0 ? sum : null;
 }

@@ -182,7 +182,7 @@ export function TaskDetailPage() {
           <Meta label="posted" value={absTime(task.posted_at)} mono />
         </div>
 
-        <PhaseBar timings={task.timings} total={inflight ? total : undefined} height={10} showLabels />
+        <PhaseBar timings={task.timings} total={total} height={10} showLabels />
         {typeof task.timings.runner_total === "number" && (
           <div className="text-[11px] text-mute">
             runner wall clock <span className="font-mono text-fg/80">{fmtSeconds(task.timings.runner_total)}</span>

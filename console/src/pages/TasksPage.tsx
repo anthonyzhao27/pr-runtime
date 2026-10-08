@@ -302,7 +302,7 @@ export function TasksPage() {
                   </td>
                   <td className="px-2 text-right font-mono text-[12px] tabular-nums text-fg/80">{fmtInt(t.priority)}</td>
                   <td className="px-2">
-                    <PhaseBar timings={t.timings} total={inflight ? total : undefined} />
+                    <PhaseBar timings={t.timings} total={total} />
                   </td>
                   <td className="px-2 text-center">
                     <ColdDot cold={t.cold} />

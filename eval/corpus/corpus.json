@@ -742,7 +742,7 @@
     "kind": "bug",
     "variant": "red",
     "synthetic": true,
-    "branch": "bug/mut-832780-red",
+    "branch": "bug/mut-257991-red",
     "mutation": "boolop",
     "upstream_msg": "synthetic: swap and/or in `if state.subdomain is not None and bp_subdomain is not None:`",
     "tests_pass": false,
@@ -761,7 +761,7 @@
     "kind": "bug",
     "variant": "green",
     "synthetic": true,
-    "branch": "bug/mut-340364-green",
+    "branch": "bug/mut-625897-green",
     "mutation": "bool",
     "upstream_msg": "synthetic: flip a boolean literal in `load_dotenv: bool = True,`",
     "tests_pass": true,
@@ -778,9 +778,104 @@
   },
   {
     "kind": "bug",
+    "variant": "red",
+    "synthetic": true,
+    "branch": "bug/mut-695857-red",
+    "mutation": "guard",
+    "upstream_msg": "synthetic: remove an early-return guard in `if self._max_form_parts is not None:`",
+    "tests_pass": false,
+    "hunks": [
+      {
+        "path": "src/flask/wrappers.py",
+        "start": 135,
+        "end": 135
+      }
+    ],
+    "src_files": [
+      "src/flask/wrappers.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "red",
+    "synthetic": true,
+    "branch": "bug/mut-811869-red",
+    "mutation": "cmp",
+    "upstream_msg": "synthetic: flip comparison operator in `if \"__\" not in key:`",
+    "tests_pass": false,
+    "hunks": [
+      {
+        "path": "src/flask/config.py",
+        "start": 167,
+        "end": 167
+      }
+    ],
+    "src_files": [
+      "src/flask/config.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "red",
+    "synthetic": true,
+    "branch": "bug/mut-689782-red",
+    "mutation": "not",
+    "upstream_msg": "synthetic: drop a negation in `and not self.files`",
+    "tests_pass": false,
+    "hunks": [
+      {
+        "path": "src/flask/wrappers.py",
+        "start": 206,
+        "end": 206
+      }
+    ],
+    "src_files": [
+      "src/flask/wrappers.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "red",
+    "synthetic": true,
+    "branch": "bug/mut-957597-red",
+    "mutation": "cmp",
+    "upstream_msg": "synthetic: flip comparison operator in `and len(value) == 1`",
+    "tests_pass": false,
+    "hunks": [
+      {
+        "path": "src/flask/json/tag.py",
+        "start": 106,
+        "end": 106
+      }
+    ],
+    "src_files": [
+      "src/flask/json/tag.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "red",
+    "synthetic": true,
+    "branch": "bug/mut-834389-red",
+    "mutation": "bool",
+    "upstream_msg": "synthetic: flip a boolean literal in `click.secho(f\"{traceback.format_exc()}\\n\", err=True, fg=\"red\")`",
+    "tests_pass": false,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 653,
+        "end": 653
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ]
+  },
+  {
+    "kind": "bug",
     "variant": "green",
     "synthetic": true,
-    "branch": "bug/mut-088358-green",
+    "branch": "bug/mut-431893-green",
     "mutation": "not",
     "upstream_msg": "synthetic: drop a negation in `if (not args and self.no_args_is_help) or (`",
     "tests_pass": true,
@@ -793,6 +888,386 @@
     ],
     "src_files": [
       "src/flask/cli.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-819143-green",
+    "mutation": "bool",
+    "upstream_msg": "synthetic: flip a boolean literal in `ensure_ascii = True`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/json/provider.py",
+        "start": 144,
+        "end": 144
+      }
+    ],
+    "src_files": [
+      "src/flask/json/provider.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-904542-green",
+    "mutation": "bool",
+    "upstream_msg": "synthetic: flip a boolean literal in `instance_relative_config: bool = False,`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 318,
+        "end": 318
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-140723-green",
+    "mutation": "bool",
+    "upstream_msg": "synthetic: flip a boolean literal in `autocorrect_location_header = False`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/wrappers.py",
+        "start": 244,
+        "end": 244
+      }
+    ],
+    "src_files": [
+      "src/flask/wrappers.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-647459-green",
+    "mutation": "boolop",
+    "upstream_msg": "synthetic: swap and/or in `if package_spec is not None and package_spec.submodule_search_locations:`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/sansio/scaffold.py",
+        "start": 739,
+        "end": 739
+      }
+    ],
+    "src_files": [
+      "src/flask/sansio/scaffold.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-953694-green",
+    "mutation": "cmp",
+    "upstream_msg": "synthetic: flip comparison operator in `if value is None:`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 441,
+        "end": 441
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-962563-green",
+    "mutation": "boolop",
+    "upstream_msg": "synthetic: swap and/or in `if args and isinstance(args[0], AppContext):`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 87,
+        "end": 87
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-194993-green",
+    "mutation": "bool",
+    "upstream_msg": "synthetic: flip a boolean literal in `is_eager=True,`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 525,
+        "end": 525
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-880325-green",
+    "mutation": "bool",
+    "upstream_msg": "synthetic: flip a boolean literal in `expose_value=False,`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 286,
+        "end": 286
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-604561-green",
+    "mutation": "bool",
+    "upstream_msg": "synthetic: flip a boolean literal in `err=True,`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 740,
+        "end": 740
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-999723-green",
+    "mutation": "bool",
+    "upstream_msg": "synthetic: flip a boolean literal in `add_version_option: bool = True,`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 567,
+        "end": 567
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-703434-green",
+    "mutation": "guard",
+    "upstream_msg": "synthetic: remove an early-return guard in `if folder.lower() == \"lib\":`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/sansio/scaffold.py",
+        "start": 790,
+        "end": 790
+      }
+    ],
+    "src_files": [
+      "src/flask/sansio/scaffold.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-364914-green",
+    "mutation": "bool",
+    "upstream_msg": "synthetic: flip a boolean literal in `type=click.Path(exists=True, dir_okay=False),`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 519,
+        "end": 519
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-595104-green",
+    "mutation": "cmp",
+    "upstream_msg": "synthetic: flip comparison operator in `if os.path.basename(parent).lower() == \"lib\":`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/sansio/scaffold.py",
+        "start": 793,
+        "end": 793
+      }
+    ],
+    "src_files": [
+      "src/flask/sansio/scaffold.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-929954-green",
+    "mutation": "guard",
+    "upstream_msg": "synthetic: remove an early-return guard in `if is_running_from_reloader():`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 771,
+        "end": 771
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-125246-green",
+    "mutation": "cmp",
+    "upstream_msg": "synthetic: flip comparison operator in `elif len(matches) > 1:`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 59,
+        "end": 59
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-391767-green",
+    "mutation": "not",
+    "upstream_msg": "synthetic: drop a negation in `elif not isinstance(args[0], AppContext):`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 101,
+        "end": 101
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-223142-green",
+    "mutation": "cmp",
+    "upstream_msg": "synthetic: flip comparison operator in `if mode == \"rb\":`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/blueprints.py",
+        "start": 125,
+        "end": 125
+      }
+    ],
+    "src_files": [
+      "src/flask/blueprints.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-730034-green",
+    "mutation": "bool",
+    "upstream_msg": "synthetic: flip a boolean literal in `\"SESSION_COOKIE_HTTPONLY\": True,`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 220,
+        "end": 220
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-409037-green",
+    "mutation": "cmp",
+    "upstream_msg": "synthetic: flip comparison operator in `first_bp_registration = not any(bp is self for bp in app.blueprints.values())`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/sansio/blueprints.py",
+        "start": 316,
+        "end": 316
+      }
+    ],
+    "src_files": [
+      "src/flask/sansio/blueprints.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-033668-green",
+    "mutation": "bool",
+    "upstream_msg": "synthetic: flip a boolean literal in `\"SESSION_COOKIE_SECURE\": False,`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 221,
+        "end": 221
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py"
     ]
   }
 ]
