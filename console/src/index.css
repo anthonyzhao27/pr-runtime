@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* light */
+  --bg: 255 255 255;
+  --panel: 246 247 249;
+  --line: 222 226 231;
+  --fg: 23 26 31;
+  --mute: 110 118 129;
+  --accent: 79 70 229; /* indigo-600 */
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: 13 15 18;
+    --panel: 22 25 30;
+    --line: 42 47 55;
+    --fg: 230 233 237;
+    --mute: 139 148 158;
+    --accent: 129 140 248; /* indigo-400 */
+    color-scheme: dark;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-bg text-fg antialiased;
+  font-feature-settings: "cv11", "ss01", "tnum";
+}
+
+/* Dense tables: keep rows tight and numbers aligned. */
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: rgb(var(--accent) / 0.25);
+}
+
+/* Thin scrollbars for pre/diff panes. */
+pre::-webkit-scrollbar,
+.overflow-x-auto::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+pre::-webkit-scrollbar-thumb,
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: rgb(var(--line));
+  border-radius: 4px;
+}

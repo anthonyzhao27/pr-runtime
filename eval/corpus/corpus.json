@@ -737,5 +737,62 @@
     "src_files": [
       "src/flask/cli.py"
     ]
+  },
+  {
+    "kind": "bug",
+    "variant": "red",
+    "synthetic": true,
+    "branch": "bug/mut-832780-red",
+    "mutation": "boolop",
+    "upstream_msg": "synthetic: swap and/or in `if state.subdomain is not None and bp_subdomain is not None:`",
+    "tests_pass": false,
+    "hunks": [
+      {
+        "path": "src/flask/sansio/blueprints.py",
+        "start": 357,
+        "end": 357
+      }
+    ],
+    "src_files": [
+      "src/flask/sansio/blueprints.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-340364-green",
+    "mutation": "bool",
+    "upstream_msg": "synthetic: flip a boolean literal in `load_dotenv: bool = True,`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/app.py",
+        "start": 635,
+        "end": 635
+      }
+    ],
+    "src_files": [
+      "src/flask/app.py"
+    ]
+  },
+  {
+    "kind": "bug",
+    "variant": "green",
+    "synthetic": true,
+    "branch": "bug/mut-088358-green",
+    "mutation": "not",
+    "upstream_msg": "synthetic: drop a negation in `if (not args and self.no_args_is_help) or (`",
+    "tests_pass": true,
+    "hunks": [
+      {
+        "path": "src/flask/cli.py",
+        "start": 679,
+        "end": 679
+      }
+    ],
+    "src_files": [
+      "src/flask/cli.py"
+    ]
   }
 ]
