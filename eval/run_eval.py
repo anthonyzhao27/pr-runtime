@@ -21,7 +21,6 @@ import httpx
 
 HERE = Path(__file__).resolve().parent
 REPO = "anthonyzhao27/flask"
-CORPUS = json.loads((HERE / "corpus" / "corpus.json").read_text())
 
 
 def gh(*a) -> str:
@@ -58,9 +57,14 @@ def main() -> None:
     ap.add_argument("--reuse-prs", action="store_true")
     ap.add_argument("--only", help="comma list of variants: red,green,clean")
     ap.add_argument("--run-id", default=time.strftime("%Y%m%d-%H%M%S"))
+    ap.add_argument("--corpus", default=str(HERE / "corpus" / "corpus.json"))
+    ap.add_argument("--limit", type=int, help="first N entries only (smoke test)")
     a = ap.parse_args()
+    CORPUS = json.loads(Path(a.corpus).read_text())
     configs = a.configs.split(",")
     entries = [e for e in CORPUS if not a.only or e["variant"] in a.only.split(",")]
+    if a.limit:
+        entries = entries[: a.limit]
     out_dir = HERE / "results" / a.run_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
