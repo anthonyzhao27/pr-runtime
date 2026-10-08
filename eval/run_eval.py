@@ -78,31 +78,35 @@ def main() -> None:
         e["pr"] = pr
     print(f"PRs ready: {prs}", file=sys.stderr)
 
-    # 2) Default config comes from the webhook; other configs via rerun on the first task we see.
+    # 2) Default config comes from the webhook (burst #1). Wait for all of them.
     default_cfg = configs[0]
+    since_default = "1970" if a.reuse_prs else since
     results = []
-    for e in entries:
-        pr = e["pr"]
-        first = wait_posted(a.api, pr, default_cfg, since if not a.reuse_prs else "1970")
-        if first is None and a.reuse_prs:
-            # No fresh task: trigger one manually via rerun on any existing task for the PR.
-            tasks = httpx.get(f"{a.api}/api/tasks", params={"pr": pr, "limit": 1}, timeout=20).json()
-            if tasks:
-                httpx.post(f"{a.api}/api/tasks/{tasks[0]['id']}/rerun", json={"config": default_cfg}, timeout=20)
-                first = wait_posted(a.api, pr, default_cfg, since)
-        if first is None:
-            print(f"  pr#{pr} {e['branch']}: no result for {default_cfg}", file=sys.stderr)
-            continue
-        results.append({**e, "config": default_cfg, "task": first})
-        print(f"  pr#{pr} {e['variant']:5s} {default_cfg:9s} verdict={first.get('verdict')} findings={len(first.get('findings', []))} "
-              f"total={first.get('timings', {}).get('total')}", file=sys.stderr)
-        for cfg in configs[1:]:
-            mark = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
-            httpx.post(f"{a.api}/api/tasks/{first['id']}/rerun", json={"config": cfg}, timeout=20)
-            t = wait_posted(a.api, pr, cfg, mark)
-            if t:
+    firsts: dict[int, dict] = {}
+    with ThreadPoolExecutor(8) as ex:
+        for e, t in zip(entries, ex.map(lambda e: wait_posted(a.api, e["pr"], default_cfg, since_default), entries)):
+            if t is None:
+                print(f"  pr#{e['pr']} {e['branch']}: no result for {default_cfg}", file=sys.stderr)
+                continue
+            firsts[e["pr"]] = t
+            results.append({**e, "config": default_cfg, "task": t})
+            print(f"  pr#{e['pr']} {e['variant']:5s} {default_cfg:9s} verdict={t.get('verdict')} findings={len(t.get('findings', []))} "
+                  f"total={t.get('timings', {}).get('total')}", file=sys.stderr)
+
+    # 3) Every other config: fire all reruns at once (burst #2..n), then collect.
+    for cfg in configs[1:]:
+        mark = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
+        todo = [e for e in entries if e["pr"] in firsts]
+        for e in todo:
+            httpx.post(f"{a.api}/api/tasks/{firsts[e['pr']]['id']}/rerun", json={"config": cfg}, timeout=20)
+        print(f"fired {len(todo)} reruns for config {cfg}", file=sys.stderr)
+        with ThreadPoolExecutor(8) as ex:
+            for e, t in zip(todo, ex.map(lambda e: wait_posted(a.api, e["pr"], cfg, mark), todo)):
+                if t is None:
+                    print(f"  pr#{e['pr']} {e['branch']}: no result for {cfg}", file=sys.stderr)
+                    continue
                 results.append({**e, "config": cfg, "task": t})
-                print(f"  pr#{pr} {e['variant']:5s} {cfg:9s} verdict={t.get('verdict')} findings={len(t.get('findings', []))} "
+                print(f"  pr#{e['pr']} {e['variant']:5s} {cfg:9s} verdict={t.get('verdict')} findings={len(t.get('findings', []))} "
                       f"total={t.get('timings', {}).get('total')}", file=sys.stderr)
 
     (out_dir / "raw.json").write_text(json.dumps(results, indent=1))

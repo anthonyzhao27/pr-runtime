@@ -56,8 +56,33 @@ class Scheduler:
             s.commit()
 
     # ---- main loop --------------------------------------------------------------------------
+    def reconcile(self) -> None:
+        """After a restart: in-memory state is gone, Postgres is not. Re-queue running tasks, resume reviews."""
+        with SessionLocal() as s:
+            running = s.query(Task).filter(Task.state == "running").all()
+            reviewing = s.query(Task).filter(Task.state == "reviewing").all()
+            for t in running:
+                t.state = "queued"
+                t.error = f"controller restarted while running on {t.runner_pod}; requeued"
+                t.runner_pod = None
+            s.commit()
+            for t in running:
+                self.enqueue(t.id, t.priority)
+            for t in reviewing:
+                self.review_pool.submit(self._review_and_post, t.id)
+        if running or reviewing:
+            log.info("reconciled after restart: %d running requeued, %d reviews resumed", len(running), len(reviewing))
+        # Any pod that is Ready but not assigned is idle by definition; stale 'done' pods are unready and get cleaned up.
+        for p in self.pods.list_ready():
+            pass
+
     def run(self) -> None:
-        log.info("scheduler started cap=%s deadline=%ss", settings.admission_cap, settings.task_deadline)
+        log.info("scheduler started cap=%s deadline=%ss review_workers=%s", settings.admission_cap, settings.task_deadline,
+                 settings.review_workers)
+        try:
+            self.reconcile()
+        except Exception:  # noqa: BLE001
+            log.exception("reconcile failed")
         while not self._stop.is_set():
             try:
                 self.tick()

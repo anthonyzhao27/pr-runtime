@@ -24,7 +24,7 @@
    },
    "targets": [
     {
-     "expr": "prr_tasks_pending",
+     "expr": "max(prr_tasks_pending)",
      "legendFormat": "pending",
      "refId": "A"
     }
@@ -68,7 +68,7 @@
    },
    "targets": [
     {
-     "expr": "prr_runners_busy",
+     "expr": "max(prr_runners_busy)",
      "legendFormat": "busy",
      "refId": "A"
     }
@@ -112,7 +112,7 @@
    },
    "targets": [
     {
-     "expr": "prr_runners_idle",
+     "expr": "max(prr_runners_idle)",
      "legendFormat": "idle",
      "refId": "A"
     }
@@ -147,7 +147,7 @@
   },
   {
    "type": "stat",
-   "title": "Posted (total)",
+   "title": "In LLM review",
    "gridPos": {
     "x": 18,
     "y": 0,
@@ -156,8 +156,8 @@
    },
    "targets": [
     {
-     "expr": "sum(prr_tasks_total{state=\"posted\"})",
-     "legendFormat": "posted",
+     "expr": "max(prr_reviews_in_flight)",
+     "legendFormat": "reviewing",
      "refId": "A"
     }
    ],
@@ -200,24 +200,29 @@
    },
    "targets": [
     {
-     "expr": "prr_tasks_pending",
+     "expr": "max(prr_tasks_pending)",
      "legendFormat": "pending",
      "refId": "A"
     },
     {
-     "expr": "prr_runners_busy",
+     "expr": "max(prr_runners_busy)",
      "legendFormat": "busy",
      "refId": "B"
     },
     {
-     "expr": "prr_runners_idle",
+     "expr": "max(prr_runners_idle)",
      "legendFormat": "idle",
      "refId": "C"
     },
     {
-     "expr": "prr_tasks_pending + prr_runners_busy",
+     "expr": "max(prr_tasks_pending) + max(prr_runners_busy)",
      "legendFormat": "pending+busy",
      "refId": "D"
+    },
+    {
+     "expr": "max(prr_reviews_in_flight)",
+     "legendFormat": "in LLM review",
+     "refId": "E"
     }
    ],
    "datasource": {
@@ -258,12 +263,12 @@
    },
    "targets": [
     {
-     "expr": "rate(prr_admission_rejects_total[30s])",
+     "expr": "sum(rate(prr_admission_rejects_total[30s]))",
      "legendFormat": "rejects/s",
      "refId": "A"
     },
     {
-     "expr": "rate(prr_cold_assignments_total[30s])",
+     "expr": "sum(rate(prr_cold_assignments_total[30s]))",
      "legendFormat": "cold assigns/s",
      "refId": "B"
     }
