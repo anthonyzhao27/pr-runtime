@@ -56,7 +56,7 @@ def main() -> None:
     ap.add_argument("run_dir")
     ap.add_argument("--judge", action="store_true")
     a = ap.parse_args()
-    run = Path(a.run_dir)
+    run = Path(a.run_dir).resolve()  # resolve so scoring via the `latest` symlink never points it at itself
     raw = json.loads((run / "raw.json").read_text())
     judge_model = os.environ.get("JUDGE_MODEL", "")
 
