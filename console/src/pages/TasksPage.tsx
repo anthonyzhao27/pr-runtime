@@ -271,7 +271,6 @@ export function TasksPage() {
             )}
             {tasks.map((t) => {
               const total = taskTotalSeconds(t, now);
-              const inflight = t.state === "running" || t.state === "reviewing";
               return (
                 <tr
                   key={t.id}
