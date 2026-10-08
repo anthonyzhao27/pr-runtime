@@ -1,0 +1,6 @@
+apiVersion: v2
+name: pr-runtime
+description: Pod-per-PR review runtime - controller, warm runner pool, Postgres, network policy
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -1,0 +1,41 @@
+image:
+  registry: 511572480852.dkr.ecr.us-east-1.amazonaws.com/pr-runtime
+  controllerTag: dev
+  runnerTag: dev
+
+controller:
+  enabled: false        # flipped on once the controller image exists (Oct 9)
+  replicas: 1
+  admissionCap: 4       # M: max runners busy at once
+  taskDeadlineSeconds: 300
+  reviewerModel: ""     # pinned at deploy time
+  judgeModel: ""
+  repo: anthonyzhao27/flask
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "1", memory: 1Gi }
+
+runner:
+  enabled: false        # flipped on with the controller
+  poolSize: 4           # N: idle warm pods
+  resources:
+    requests: { cpu: 500m, memory: 512Mi }
+    limits: { cpu: "1", memory: 1Gi }
+  workSizeLimit: 2Gi
+
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  storage: 8Gi
+  storageClass: gp3
+  database: prruntime
+  user: prruntime
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+
+# Secret is created out-of-band from .env by scripts/sync_secret.sh; the chart only references it.
+secretName: pr-runtime-env
+
+networkPolicy:
+  enabled: true
