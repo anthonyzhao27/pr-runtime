@@ -1,0 +1,100 @@
+# Day-1 baseline: KEDA ScaledJob, one Job per SQS message, no warm pool, no admission control.
+# The pod must pull its own message, so it carries AWS credentials and a mounted SA token.
+# That is the trust problem the controller design removes. Kept for the cold-start comparison.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: baseline-job
+  namespace: pr-runtime
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: aws-pod-identity
+  namespace: pr-runtime
+spec:
+  podIdentity:
+    provider: aws
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: baseline-runner
+  namespace: pr-runtime
+spec:
+  pollingInterval: 5
+  maxReplicaCount: 20
+  minReplicaCount: 0
+  successfulJobsHistoryLimit: 30
+  failedJobsHistoryLimit: 30
+  scalingStrategy:
+    strategy: accurate
+  triggers:
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: aws-pod-identity
+      metadata:
+        queueURL: https://sqs.us-east-1.amazonaws.com/511572480852/pr-runtime-tasks
+        queueLength: "1"
+        awsRegion: us-east-1
+  jobTargetRef:
+    backoffLimit: 0
+    ttlSecondsAfterFinished: 3600
+    template:
+      metadata:
+        labels:
+          app: baseline-runner
+      spec:
+        serviceAccountName: baseline-job
+        restartPolicy: Never
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          fsGroup: 1000
+          seccompProfile:
+            type: RuntimeDefault
+        volumes:
+          - name: shared
+            emptyDir: {}
+          - name: work
+            emptyDir:
+              sizeLimit: 2Gi
+        initContainers:
+          - name: fetch
+            image: 511572480852.dkr.ecr.us-east-1.amazonaws.com/pr-runtime/tools:baseline-fetch
+            env:
+              - name: QUEUE_URL
+                value: https://sqs.us-east-1.amazonaws.com/511572480852/pr-runtime-tasks
+              - name: TASK_FILE
+                value: /shared/task.json
+            volumeMounts:
+              - name: shared
+                mountPath: /shared
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
+        containers:
+          - name: runner
+            image: 511572480852.dkr.ecr.us-east-1.amazonaws.com/pr-runtime/runner:dev
+            imagePullPolicy: Always
+            env:
+              - name: RUNNER_MODE
+                value: job
+              - name: TASK_FILE
+                value: /shared/task.json
+            volumeMounts:
+              - name: shared
+                mountPath: /shared
+                readOnly: true
+              - name: work
+                mountPath: /work
+            resources:
+              requests: { cpu: "500m", memory: "512Mi" }
+              limits: { cpu: "1", memory: "1Gi" }
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]

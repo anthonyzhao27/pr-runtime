@@ -159,7 +159,14 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     mode = os.environ.get("RUNNER_MODE", "server")
     if mode == "job":
-        task = json.loads(os.environ["TASK_JSON"])
+        if os.environ.get("TASK_FILE"):
+            if not os.path.exists(os.environ["TASK_FILE"]):
+                print("no task file; nothing to do", flush=True)
+                return
+            with open(os.environ["TASK_FILE"]) as f:
+                task = json.load(f)
+        else:
+            task = json.loads(os.environ["TASK_JSON"])
         do_task_and_exit(task)
         return
     # Warm up: copy seed into the writable workdir before declaring idle.

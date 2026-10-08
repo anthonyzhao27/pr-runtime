@@ -7,7 +7,7 @@ output "update_kubeconfig" {
 }
 
 output "webhook_url" {
-  value = "${aws_apigatewayv2_stage.default.invoke_url}/webhook"
+  value = "${trimsuffix(aws_apigatewayv2_stage.default.invoke_url, "/")}/webhook"
 }
 
 output "queue_url" {
@@ -27,3 +27,7 @@ output "account_id" {
 }
 
 data "aws_caller_identity" "current" {}
+
+output "ecr_tools" {
+  value = aws_ecr_repository.tools.repository_url
+}
