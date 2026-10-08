@@ -111,3 +111,13 @@ resource "aws_instance" "driver" {
 output "driver_instance_id" {
   value = aws_instance.driver.id
 }
+
+# Inside the VPC the EKS endpoint resolves to its private address; admit the driver to the cluster security group.
+resource "aws_vpc_security_group_ingress_rule" "driver_to_cluster" {
+  security_group_id            = module.eks.cluster_security_group_id
+  referenced_security_group_id = aws_security_group.driver.id
+  from_port                    = 443
+  to_port                      = 443
+  ip_protocol                  = "tcp"
+  description                  = "driver box to EKS API"
+}
