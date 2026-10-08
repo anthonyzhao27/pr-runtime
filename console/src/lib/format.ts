@@ -67,7 +67,7 @@ export function taskTotalSeconds(t: Task, now = Date.now()): number | null {
     const start = Date.parse(t.admitted_at ?? t.created_at);
     if (!Number.isNaN(start)) return Math.max(0, (now - start) / 1000);
   }
-  const phases = ["prepare", "fetch", "checkout", "diff", "pytest", "ruff", "llm", "post"];
+  const phases = ["wait", "prepare", "fetch", "checkout", "diff", "pytest", "ruff", "llm", "post"];
   const sum = phases.reduce((acc, k) => acc + (typeof tm[k] === "number" ? tm[k] : 0), 0);
   return sum > 0 ? sum : null;
 }
