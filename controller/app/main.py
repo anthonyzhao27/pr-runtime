@@ -62,6 +62,18 @@ def healthz():
     return {"ok": True}
 
 
+EVAL_DIR = os.environ.get("EVAL_RESULTS_DIR", "/eval-results")
+
+
+@app.get("/eval/results/latest/{name}")
+def eval_results(name: str):
+    # Eval output is published into a ConfigMap mounted at EVAL_DIR (see deploy/chart/templates/controller.yaml).
+    path = os.path.join(EVAL_DIR, os.path.basename(name))
+    if not os.path.isfile(path):
+        return JSONResponse({"error": "no eval results yet"}, status_code=404)
+    return FileResponse(path)
+
+
 if os.path.isdir(STATIC):
     if os.path.isdir(os.path.join(STATIC, "assets")):
         app.mount("/assets", StaticFiles(directory=os.path.join(STATIC, "assets")), name="assets")

@@ -95,9 +95,16 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: eval-results
+              mountPath: /eval-results
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir: {}
+        - name: eval-results
+          configMap:
+            name: eval-results
+            optional: true
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
