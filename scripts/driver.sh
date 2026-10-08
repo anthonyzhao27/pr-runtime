@@ -21,8 +21,10 @@ get() {
 }
 
 send() {
-  local script
-  script=$(printf '%s' "$1" | python3 -c 'import json,sys; print(json.dumps([ "sudo -u ec2-user -i bash -lc " + json.dumps(sys.stdin.read()) ]))')
+  # base64 the command so no quoting survives the SSM JSON round-trip; runs as ec2-user with a login shell.
+  local b64 script
+  b64=$(printf '%s' "$1" | base64 | tr -d '\n')
+  script=$(python3 -c 'import json,sys; print(json.dumps(["echo " + sys.argv[1] + " | base64 -d | sudo -u ec2-user -i bash -s"]))' "$b64")
   aws ssm send-command --profile "$PROFILE" --instance-ids "$ID" --document-name AWS-RunShellScript \
     --timeout-seconds 7200 --parameters "{\"commands\":$script,\"executionTimeout\":[\"7200\"]}" \
     --query Command.CommandId --output text
