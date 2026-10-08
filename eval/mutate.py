@@ -230,9 +230,11 @@ def main() -> None:
         if keep and a.noisy and not green:
             keep = False  # noisy set is green-only
         if keep:
+          try:
             per_kind[kind] = per_kind.get(kind, 0) + 1
             variant = ("noisy" if a.noisy else "green") if green else "red"
             branch = f"bug/{mid}-{variant}"
+            path.write_text(original)  # clean tree before switching branches
             if a.noisy:
                 # Diffs (ours and GitHub's) are taken from the merge-base. A base that merely *branched off* main
                 # contributes nothing, so: start from clean-base (= main minus C), re-apply C, then mutate.
@@ -266,6 +268,10 @@ def main() -> None:
             survivors += green
             killed += not green
             print(f"  {'green' if green else 'red  '} {branch:24s} {rel}:{lineno} {kind}", file=sys.stderr)
+          except Exception as ex:  # noqa: BLE001
+            print(f"  skip {rel}:{lineno} {kind}: {str(ex).splitlines()[0][:120]}", file=sys.stderr)
+            subprocess.run(["git", "cherry-pick", "--abort"], cwd=repo, capture_output=True)
+            per_kind[kind] -= 1
         sh("git", "checkout", "-q", "--force", "origin/main", cwd=repo)
         path.write_text(original)
     print(f"tried {tried}; kept {survivors} green + {killed} red", file=sys.stderr)
