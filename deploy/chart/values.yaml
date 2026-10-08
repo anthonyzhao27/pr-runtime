@@ -8,8 +8,8 @@ controller:
   replicas: 1
   admissionCap: 4       # M: max runners busy at once
   taskDeadlineSeconds: 300
-  reviewerModel: ""     # pinned at deploy time
-  judgeModel: ""
+  reviewerModel: gpt-6-astra
+  judgeModel: gpt-6-luna
   repo: anthonyzhao27/flask
   queueUrl: https://sqs.us-east-1.amazonaws.com/511572480852/pr-runtime-tasks
   postReviews: true
