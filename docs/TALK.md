@@ -57,3 +57,16 @@ Cut to numbers slide.
 - Why Pod Identity, not IRSA? → No OIDC provider juggling; association is one resource per SA.
 - Why Lambda in the ingress path? → API GW's SQS integration can't forward the HMAC header into message attributes (hard limit). Lambda verifies at the edge, so nothing unauthenticated reaches the queue.
 - What did you learn from Slurm that applied here? → Admission/cap, preemption handling, and that capacity is a quota problem before it is a scheduler problem (vCPU quota was 5).
+
+## Numbers so far (Oct 7 night; refresh after final runs)
+
+| scenario | n | time-to-comment p50 | p95 | wait for runner p50 | runner | LLM p50 / p95 |
+|---|---|---|---|---|---|---|
+| cold baseline (KEDA ScaledJob, no pool, no LLM) | 1 | ~35s | — | ~15s (pod schedule) | 6s (+16s pod) | — |
+| quiet, warm pool (single PRs) | 20 | 24s | 72s | 0.5s | 3.9s | 14.9s / 25.1s |
+| burst (56 PRs, cap 4, pool 4) | 121 | 98s | 224s | 33s | 4.0s | 14.2s / 38.8s |
+
+Eval run 1 (gpt-6-astra @ high, judge gpt-6-luna): full = 35/35 strict, 34/35 semantic, FP 0/20; diff_only = 34/35 strict, 34/35 semantic, FP 0/20. One equivalent mutant excluded. Noisy v1 (bug inside real diff): 11/11 after excluding 2 equivalent mutants; v2 construction pending.
+Tokens: ~4k in / 0.4k out per review. 112 reviews ≈ 0.45M input tokens.
+
+Talking points from these: under burst, the runner is never the bottleneck (4s); queue wait (cap) and the LLM stage are. Pool N > cap M removes the refill wait; a separate LLM concurrency knob removes the review backlog. Cold vs warm matters most at the *first* wave; after that it is a throughput question.
