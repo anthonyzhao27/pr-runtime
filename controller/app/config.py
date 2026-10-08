@@ -38,6 +38,7 @@ class Settings:
     node_vcpu: float = float(os.environ.get("NODE_VCPU", "2"))
     runner_cpu_limit: float = float(os.environ.get("RUNNER_CPU_LIMIT", "1"))
     pool_size: int = _int("POOL_SIZE", 4)
+    guidelines_dir: str = os.environ.get("GUIDELINES_DIR", "/guidelines")
 
     def compute_usd(self, seconds: float) -> float:
         return seconds * (self.node_usd_per_hour / 3600.0) * (self.runner_cpu_limit / self.node_vcpu)

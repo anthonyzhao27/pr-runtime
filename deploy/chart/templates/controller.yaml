@@ -116,12 +116,19 @@ spec:
             - name: eval-results
               mountPath: /eval-results
               readOnly: true
+            - name: guidelines
+              mountPath: /guidelines
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir: {}
         - name: eval-results
           configMap:
             name: eval-results
+            optional: true
+        - name: guidelines
+          configMap:
+            name: guidelines
             optional: true
 ---
 apiVersion: monitoring.coreos.com/v1

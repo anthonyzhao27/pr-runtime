@@ -70,6 +70,24 @@ def _clip(s: str | None, n: int) -> str:
     return s if len(s) <= n else s[:n] + f"\n... [{len(s) - n} chars truncated]"
 
 
+def load_guidelines(touched: list[str]) -> str:
+    """S1: per-directory rules mined from upstream review comments. File names: src__flask.md, tests.md, ... (slashes -> __)."""
+    import os
+    seen, parts = set(), []
+    for path in touched:
+        segs = path.split("/")
+        candidates = ["/".join(segs[:i]) for i in range(min(len(segs) - 1, 3), 0, -1)]  # deepest dir first
+        for d in candidates:
+            name = d.replace("/", "__") + ".md"
+            fp = os.path.join(settings.guidelines_dir, name)
+            if d not in seen and os.path.isfile(fp):
+                seen.add(d)
+                with open(fp) as f:
+                    parts.append(f"### Guidelines for `{d}/`\n" + f.read().strip())
+                break
+    return "\n\n".join(parts)
+
+
 def build_prompt(task: Task) -> str:
     parts = [f"# Pull request #{task.pr_number} in {task.repo}", f"base {task.base_sha[:10]} -> head {task.head_sha[:10]}", ""]
     parts += ["## Diff", "```diff", _clip(task.diff, 60_000), "```", ""]
@@ -79,6 +97,10 @@ def build_prompt(task: Task) -> str:
         parts += ["## Touched files (head revision)"]
         for path, content in (task.files or {}).items():
             parts += [f"### {path}", "```python", _clip(content, 40_000), "```", ""]
+    if task.config == "guided":
+        g = load_guidelines(task.touched_files or [])
+        if g:
+            parts += ["## Project review guidelines (distilled from maintainers' past review comments; cite the rule id when a finding applies one)", g, ""]
     return "\n".join(parts)
 
 
