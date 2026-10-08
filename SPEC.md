@@ -31,7 +31,9 @@ Each row: what we chose, what we rejected, and the one-sentence Q&A answer.
 | 15 | Observability | kube-prometheus-stack via Helm; controller `/metrics`; Grafana dashboard JSON committed; Rich live table in logs for dev | CloudWatch custom metrics | "Grafana at 5s refresh is what the burst video shows; CloudWatch refreshes once a minute." |
 | 16 | Demo | Pre-recorded video, cluster may be down on Oct 15 | Live demo | "Travelling the night before. Zero live risk." |
 | 17 | Secrets | k8s Secret from gitignored `.env`, mounted into controller only | Secrets Manager + IRSA | "k8s Secret for a 6-day build; in prod this is Secrets Manager via IRSA so nothing is ever on a laptop. That swap is ~30 minutes." |
-| 18 | Framing | Infra-question framing with eval as second act. Name Circus on slide 2. | "I built an AI code reviewer" | "You wrote about X. I wanted to measure Y for myself." |
+| 18 | Task console (full-stack) | React + Vite + TypeScript SPA served by the controller; FastAPI JSON API + SSE; Postgres (in-cluster via Helm) for tasks/findings/feedback | FastAPI + Jinja + HTMX; custom "observability dashboard" | "Grafana already owns runtime health. The console is the product surface: what did the reviewer find, was it right, re-run it. Thumbs-down on a finding is how engineers teach the reviewer." |
+| 19 | Database | Postgres via Helm chart in-cluster (`bitnami/postgresql`), single replica, PVC | RDS; SQLite in the controller pod | "Their DB, 20 minutes, no extra AWS bill. RDS is the prod answer." |
+| 20 | Framing | Infra-question framing with eval as second act. Name Circus on slide 2. | "I built an AI code reviewer" | "You wrote about X. I wanted to measure Y for myself." |
 
 ---
 
@@ -53,7 +55,11 @@ API Gateway (HTTP API) ──► SQS  pr-runtime-tasks  (+ DLQ)
                      │  - LLM review       │
                      │  - post GH review   │
                      │  - /metrics         │
+                     │  - /api + SSE       │◄──► Postgres (Helm, in-cluster)
+                     │  - serves console   │     tasks, findings, feedback
                      └──────┬──────────────┘
+                            │                 Console (React/Vite/TS):
+                            │                 task list, task detail, finding feedback, re-run
                             │ POST /task  {repo, sha, base, pr}
                             ▼
                 ┌──────────────────────────────┐
@@ -97,6 +103,8 @@ API Gateway (HTTP API) ──► SQS  pr-runtime-tasks  (+ DLQ)
 - `reviewer.py` prompt assembly, OpenAI structured outputs, `read_file` tool loop (cap 5), config-pinned model IDs.
 - `github.py` Reviews API, review comment posting, verdict.
 - `metrics.py` Prometheus client; Rich live table when `DEV=1`.
+- `db.py` SQLAlchemy models: `tasks`, `findings`, `feedback`, `runs` (eval config per task). Alembic not needed; `create_all` on boot.
+- `api.py` JSON endpoints: `GET /api/tasks`, `GET /api/tasks/{id}`, `POST /api/tasks/{id}/rerun?config=`, `POST /api/findings/{id}/feedback`, `GET /api/events` (SSE). Serves built console from `/static`.
 - Config: `M`, pool size `N`, deadline seconds, model IDs, repo slug.
 
 ### 3.3 `runner/` (Python 3.12, tiny HTTP server)
@@ -119,10 +127,19 @@ API Gateway (HTTP API) ──► SQS  pr-runtime-tasks  (+ DLQ)
   - **Ablation configs**: `diff_only` vs `diff+tests+files`. One bar chart.
 - Output: `eval/results/<run_id>/{raw.jsonl, summary.md, chart.png}`.
 
-### 3.5 `dashboards/`
+### 3.5 `console/` (React 18 + Vite + TypeScript)
+- Pages: **Tasks** (live table: PR, state, phase timings, verdict, config), **Task detail** (diff viewer, pytest/ruff output, findings list with file:line → GitHub links, thumbs up/down + note per finding, re-run with config picker), **Eval** (results table + ablation chart from `eval/results`).
+- Data: `fetch` against `/api/*`, `EventSource` on `/api/events` for live state. No state library; React Query if it saves time.
+- Styling: Tailwind. No component library.
+- Build: `vite build` → `controller/static/`, baked into the controller image. One image, one Deployment, no separate frontend service.
+
+### 3.6 `deploy/postgres`
+- `bitnami/postgresql` Helm release, single replica, 8Gi PVC (gp3 via EBS CSI addon), password from the same k8s Secret. `DATABASE_URL` injected into the controller.
+
+### 3.7 `dashboards/`
 - Grafana JSON: queue depth, idle/busy runners, admission rejects, time-to-comment p50/p95, cold vs warm start histogram.
 
-### 3.6 `docs/`
+### 3.8 `docs/`
 - `DECISIONS.md` — living log, appended as things break. This is the Q&A study guide.
 - `TALK.md` — slide outline + demo script + hard-questions list.
 
@@ -134,9 +151,9 @@ API Gateway (HTTP API) ──► SQS  pr-runtime-tasks  (+ DLQ)
 2. Terminal B: `eval/open_pr.py --branch bug/<sha>-greentest`. One PR opens.
 3. Terminal A: one runner flips busy; a fresh pod schedules to refill.
 4. Terminal B tails controller logs: assigned → clone 2s → pytest 38s (green) → LLM 9s → review posted.
-5. Browser: PR shows inline comment on the exact line with the reverted hunk, `REQUEST_CHANGES`.
+5. Browser: PR shows inline comment on the exact line with the reverted hunk, `REQUEST_CHANGES`. Switch tab to the console: same task, phase timings, finding with thumbs up/down. Click thumbs-up.
 6. Terminal B: `eval/run_eval.py --config full --batch 20`. Twenty PRs open in 5 seconds.
-7. Grafana: `tasks_pending` spikes to 20, `runners_busy` pins at M=4, pool refills in waves, p95 time-to-comment visible. Cold-start baseline (KEDA, recorded earlier) shown side by side.
+7. Console task list fills live via SSE. Grafana: `tasks_pending` spikes to 20, `runners_busy` pins at M=4, pool refills in waves, p95 time-to-comment visible. Cold-start baseline (KEDA, recorded earlier) shown side by side.
 8. Cut to results slide.
 
 Target length: under 4 minutes. Record 3+ takes. Keep raw screen recordings.
@@ -147,7 +164,7 @@ Target length: under 4 minutes. Record 3+ takes. Keep raw screen recordings.
 
 1. **The question** (1 min): running untrusted PR code per-task on k8s — what does the warm pool and admission layer actually buy?
 2. **Context** (1 min): Uncountable's post, Circus shape. "I wanted to measure it myself."
-3. **Architecture** (2 min): the diagram above. Trust split called out.
+3. **Architecture** (2 min): the diagram above. Trust split called out. Console = product surface, Grafana = runtime health.
 4. **Demo video** (4 min).
 5. **Numbers** (2 min): cold vs warm p50/p95; time-to-comment under burst with M=2/4/8; cost per PR split into compute vs tokens.
 6. **Eval** (1.5 min): recall on red-test vs green-test bugs; FP rate on clean PRs; ablation chart.
@@ -165,25 +182,26 @@ Target length: under 4 minutes. Record 3+ takes. Keep raw screen recordings.
 - What's the LLM's false positive rate on clean PRs and would you merge on APPROVE?
 - What's the per-PR cost? Where's the money going?
 - Why Python for the controller when Circus is TypeScript?
+- Why serve the SPA from the controller instead of a separate frontend deployment / CDN?
+- What happens to feedback rows? How would they change the reviewer? (→ stretch S1.)
+- Why Postgres in-cluster, and what breaks if the node dies? (PVC on EBS, single AZ.)
 - What would you need to make this multi-repo?
 
 ---
 
 ## 6. Schedule (Oct 7 → Oct 13)
 
-Stretch items are *not* on this schedule. They happen only if a day finishes early.
+Stretch items are *not* on this schedule. The console took the buffer day; any slip now eats into video day.
 
 | Date | Deliverable | Done when |
 |---|---|---|
-| **Oct 7 (Tue)** | Spec, repo skeleton, Terraform written and `apply` started. Quota increase requested. | `kubectl get nodes` shows nodes. eksctl bailout if Terraform >4h. |
-| **Oct 8 (Wed)** | Runner image built + pushed (ECR). KEDA ScaledJob baseline: webhook → SQS → Job → pytest output in logs. Cold-start numbers recorded. | Open PR on fork → Job runs → logs show test output. |
-| **Oct 9 (Thu)** | Controller: SQS poll, warm pool, assign, exit-after-one refill, admission cap, Rich table. No LLM yet. | 10 PRs in a burst → all run, cap respected, pool refills. |
-| **Oct 10 (Fri)** | Reviewer: structured LLM call + `read_file`, inline GitHub review posted as bot. Trust split + pod hardening + NetworkPolicy. | PR gets inline comments from bot account. Runner has no secrets. |
-| **Oct 11 (Sat)** | Eval corpus built (30 bugs × 2 variants + 20 clean). Judge. Prometheus + Grafana + dashboard. Run eval, both configs. | `summary.md` + chart exist. Grafana shows burst. |
-| **Oct 12 (Sun)** | Record video (3+ takes). Slides. `DECISIONS.md` finalized. | Video file + deck exist. |
-| **Oct 13 (Mon)** | Anthony runs the demo end-to-end himself. 30-min mock Q&A. `TALK.md` hard questions answered. Optional `terraform destroy`. | Anthony can answer every hard question without notes. |
-
----
+| **Oct 7 (Tue)** | Spec, repo skeleton, Terraform written. Quota increase (granted: 64). | `terraform plan` clean. Apply on go-ahead. |
+| **Oct 8 (Wed)** | Cluster up. Runner image built + pushed (ECR). KEDA ScaledJob baseline: webhook → SQS → Job → pytest output in logs. Cold-start numbers. Postgres + Prometheus/Grafana Helm installs. | Open PR on fork → Job runs → logs show test output. `psql` connects. |
+| **Oct 9 (Thu)** | Controller: SQS poll, warm pool, assign, exit-after-one refill, admission cap, Rich table, Postgres task rows, `/api/tasks` + SSE. No LLM yet. | 10 PRs in a burst → all run, cap respected, pool refills, rows in DB. |
+| **Oct 10 (Fri)** | Reviewer: structured LLM call + `read_file`, inline GitHub review as bot. Findings persisted. Trust split + pod hardening + NetworkPolicy. | PR gets inline comments from bot. Runner has no secrets. |
+| **Oct 11 (Sat)** | **Console**: Tasks, Task detail, feedback, re-run. Built into controller image. Eval corpus (30 bugs × 2 + 20 clean) + judge scaffolding. | Console shows live tasks; thumbs-down writes a row. Corpus branches exist on fork. |
+| **Oct 12 (Sun)** | Run eval, both configs (also the burst). Grafana dashboard. Record video (3+ takes). Slides draft. | `summary.md` + chart. Video file exists. |
+| **Oct 13 (Mon)** | Anthony runs the demo end-to-end himself. 30-min mock Q&A. `TALK.md` hard questions. Slides final. Optional `terraform destroy`. | Anthony answers every hard question without notes. |
 
 ## 7. Known constraints and gotchas
 
@@ -219,11 +237,12 @@ Webhook secret is generated by `scripts/create_webhook.sh` and written to the sa
 pr-runtime/
   SPEC.md
   infra/              Terraform
-  controller/         FastAPI controller, Dockerfile
+  controller/         FastAPI controller + API + SSE, serves console, Dockerfile
+  console/            React + Vite + TS SPA (built into controller/static)
   runner/             runner server, Dockerfile (Flask baked in)
   eval/               corpus builder, runner, scorer, results/
   dashboards/         Grafana JSON
-  deploy/             k8s manifests / Helm chart for controller + runner + NetworkPolicy
+  deploy/             k8s manifests for controller + runner + NetworkPolicy; Helm values for postgres, kube-prometheus-stack, keda
   docs/DECISIONS.md   living decision log
   docs/TALK.md        slides outline, demo script, hard questions
   scripts/            create_webhook.sh, open_pr.py, burst.py
