@@ -26,7 +26,7 @@ Each row: what we chose, what we rejected, and the one-sentence Q&A answer.
 | 10 | Test selection | Full `pytest` every time | Affected-tests only | "Suite is under a minute. Selection logic is a bug farm I didn't need." |
 | 11 | Models | Reviewer: gpt-astra. Judge: gpt-luna. Exact IDs pinned in config and logged per run. | Same model for both | "Judge is a different model so the reviewer isn't grading itself." |
 | 12 | Eval ground truth | 30 reverted historical Flask bug fixes (two variants) + 20 real clean PRs; strict and semantic "caught" definitions; 2-config ablation | Hand-labeled synthetic bugs | "Bugs are ones Flask maintainers actually shipped and fixed. The interesting variant is the one where CI stays green." |
-| 13 | IaC | Terraform (`terraform-aws-modules/eks` + SQS + API GW + IRSA + Secrets Manager) | eksctl | "One repo describes everything, one `destroy` tears it down. eksctl leaves the non-EKS half orphaned." |
+| 13 | IaC | Terraform (`terraform-aws-modules/eks` + SQS + API GW + IRSA) | eksctl | "One repo describes everything, one `destroy` tears it down. eksctl leaves the non-EKS half orphaned." |
 | 14 | Nodes | Managed node group, on-demand, **Graviton (arm64)** since the laptop is arm64 and images build natively | Spot; Karpenter; x86 | "Recording reliability beat saving thirty cents an hour. Karpenter is the real answer at scale; I can talk about preemption from Slurm." |
 | 15 | Observability | kube-prometheus-stack via Helm; controller `/metrics`; Grafana dashboard JSON committed; Rich live table in logs for dev | CloudWatch custom metrics | "Grafana at 5s refresh is what the burst video shows; CloudWatch refreshes once a minute." |
 | 16 | Demo | Pre-recorded video, cluster may be down on Oct 15 | Live demo | "Travelling the night before. Zero live risk." |
@@ -46,7 +46,7 @@ API Gateway (HTTP API) ──► SQS  pr-runtime-tasks  (+ DLQ)
                               │ long-poll
                               ▼
                      ┌─────────────────────┐
-                     │  controller (pod)   │  trusted: IRSA → Secrets Manager
+                     │  controller (pod)   │  trusted: k8s Secret (env)
                      │  - validate HMAC    │  (github-bot PAT, openai key, webhook secret)
                      │  - rank + admit     │
                      │  - assign to runner │
