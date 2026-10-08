@@ -119,6 +119,7 @@ class Scheduler:
             t.attempts += 1
             t.cold = cold
             waited = (t.admitted_at - t.created_at).total_seconds()
+            t.timings = {**(t.timings or {}), "wait": round(waited, 3)}
             s.commit()
             snapshot = t.to_dict()
         with self.lock:
