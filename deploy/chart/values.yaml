@@ -4,19 +4,21 @@ image:
   runnerTag: dev
 
 controller:
-  enabled: false        # flipped on once the controller image exists (Oct 9)
+  enabled: true
   replicas: 1
   admissionCap: 4       # M: max runners busy at once
   taskDeadlineSeconds: 300
   reviewerModel: ""     # pinned at deploy time
   judgeModel: ""
   repo: anthonyzhao27/flask
+  queueUrl: https://sqs.us-east-1.amazonaws.com/511572480852/pr-runtime-tasks
+  postReviews: true
   resources:
     requests: { cpu: 250m, memory: 512Mi }
     limits: { cpu: "1", memory: 1Gi }
 
 runner:
-  enabled: false        # flipped on with the controller
+  enabled: true
   poolSize: 4           # N: idle warm pods
   resources:
     requests: { cpu: 500m, memory: 512Mi }

@@ -117,9 +117,11 @@ def do_task_and_exit(task: dict) -> None:
     except Exception as e:  # noqa: BLE001
         result = {"task_id": task.get("task_id"), "error": f"runner exception: {e!r}"}
     post_result(result)
-    print(f"task {task.get('task_id')} done in {result.get('total_seconds', 0):.1f}s; exiting", flush=True)
-    sys.stdout.flush()
-    os._exit(0)
+    print(f"task {task.get('task_id')} done in {result.get('total_seconds', 0):.1f}s", flush=True)
+    if os.environ.get("RUNNER_MODE", "server") == "job":
+        os._exit(0)
+    # Server mode: stay up but unready. The controller deletes this pod; the ReplicaSet replaces it.
+    STATE.update(state="done", finished_at=time.time())
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -137,7 +139,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/healthz":
-            self._json(200, STATE)
+            self._json(200 if STATE["state"] == "idle" else 503, STATE)
         else:
             self._json(404, {"error": "not found"})
 

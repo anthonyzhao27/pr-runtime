@@ -1,0 +1,52 @@
+{{- if .Values.runner.enabled }}
+# Warm pool. Each pod serves exactly one task; the controller deletes it afterwards and the
+# ReplicaSet replaces it. No service account token, no secrets, read-only root, egress-restricted.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runner
+spec:
+  replicas: {{ .Values.runner.poolSize }}
+  selector:
+    matchLabels: { app: runner }
+  template:
+    metadata:
+      labels: { app: runner }
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 5
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: runner
+          image: {{ .Values.image.registry }}/runner:{{ .Values.image.runnerTag }}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: CONTROLLER_URL
+              value: http://controller:8000
+            - name: TASK_DEADLINE_SECONDS
+              value: {{ .Values.controller.taskDeadlineSeconds | quote }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 2
+            failureThreshold: 1
+          resources: {{- toYaml .Values.runner.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - name: work
+              mountPath: /work
+      volumes:
+        - name: work
+          emptyDir:
+            sizeLimit: {{ .Values.runner.workSizeLimit }}
+{{- end }}

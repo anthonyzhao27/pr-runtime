@@ -1,0 +1,41 @@
+{{- if .Values.networkPolicy.enabled }}
+# Runner may talk to: the controller (results), DNS, and github.com (anonymous clone). Nothing else.
+# Ingress only from the controller (task assignment) and from kubelet probes (node IPs are allowed via no ingress rule restriction on probes - kubelet probes bypass NetworkPolicy on VPC CNI).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: runner-egress
+spec:
+  podSelector:
+    matchLabels: { app: runner }
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: controller }
+      ports:
+        - port: 8080
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: { app: controller }
+      ports:
+        - port: 8000
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels: { k8s-app: kube-dns }
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 169.254.169.254/32
+      ports:
+        - port: 443
+{{- end }}

@@ -1,0 +1,114 @@
+{{- if .Values.controller.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: controller
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: controller
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: controller
+subjects:
+  - kind: ServiceAccount
+    name: controller
+roleRef:
+  kind: Role
+  name: controller
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: controller
+  labels: { app: controller }
+spec:
+  selector: { app: controller }
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller
+spec:
+  replicas: {{ .Values.controller.replicas }}
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: controller }
+  template:
+    metadata:
+      labels: { app: controller }
+    spec:
+      serviceAccountName: controller
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: controller
+          image: {{ .Values.image.registry }}/controller:{{ .Values.image.controllerTag }}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: NAMESPACE
+              valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+            - name: QUEUE_URL
+              value: {{ .Values.controller.queueUrl | quote }}
+            - name: REPO
+              value: {{ .Values.controller.repo | quote }}
+            - name: ADMISSION_CAP
+              value: {{ .Values.controller.admissionCap | quote }}
+            - name: TASK_DEADLINE_SECONDS
+              value: {{ .Values.controller.taskDeadlineSeconds | quote }}
+            - name: REVIEWER_MODEL
+              value: {{ .Values.controller.reviewerModel | quote }}
+            - name: JUDGE_MODEL
+              value: {{ .Values.controller.judgeModel | quote }}
+            - name: POST_REVIEWS
+              value: {{ .Values.controller.postReviews | quote }}
+            - name: DATABASE_URL
+              value: "postgresql+psycopg://{{ .Values.postgres.user }}:$(POSTGRES_PASSWORD)@postgres:5432/{{ .Values.postgres.database }}"
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secretName }}
+          resources: {{- toYaml .Values.controller.resources | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8000 }
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: controller
+  labels: { app: controller }
+spec:
+  selector:
+    matchLabels: { app: controller }
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 5s
+{{- end }}

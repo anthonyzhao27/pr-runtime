@@ -22,3 +22,11 @@ Plan was GitHub → API Gateway HTTP API → SQS with the `X-Hub-Signature-256` 
 
 ## 2026-10-07 — The KEDA baseline pod has to hold AWS credentials
 With KEDA ScaledJob there is no dispatcher: each Job pod must `ReceiveMessage` itself, so the untrusted pod gets an IAM role (Pod Identity) and a mounted service-account token. That is exactly the trust leak the controller design removes. Keeping the baseline anyway for the cold-start comparison, with the message pull isolated in an init container so the runner image itself stays free of the AWS SDK.
+
+## 2026-10-07 — "Exit after one task" does not work inside a Deployment
+Original plan: runner process exits after a task, pod dies, ReplicaSet refills. Reality: a Deployment pod has `restartPolicy: Always`, so the *container* restarts in place with the same pod name and the same dirty `/work` emptyDir. The pod is not ephemeral at all. Fix: the runner stays up but flips its readiness to 503 (`state=done`), and the controller deletes the pod when the result arrives. Pod deletion is the real ephemeral boundary; the ReplicaSet still refills. Side benefit: a crashed controller leaves "done" pods unready instead of re-assignable.
+
+## 2026-10-07 — First warm-vs-cold numbers (n=1 each, same 4-line PR)
+Cold (KEDA ScaledJob, no pool): push → pod scheduled 15s → pod total 16s → ~35s to result.
+Warm (controller + pool of 4): push → queued → assigned in 0.7s → result in 4.5s. pytest itself 3.4s on m7g.large (1.1s on the laptop).
+Everything the warm pod pre-pays (image pull, seed copy, dep install) is what the cold path spends. Proper distributions come from the eval run.
