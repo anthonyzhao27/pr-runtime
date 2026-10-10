@@ -18,3 +18,4 @@ cold_assignments = Counter("prr_cold_assignments_total", "Tasks assigned to a ru
 llm_tokens = Counter("prr_llm_tokens_total", "Tokens used by the reviewer", ["direction"])
 cost_usd = Counter("prr_cost_usd_total", "Accumulated cost in USD", ["kind"])  # compute | tokens
 tasks_lost = Counter("prr_tasks_lost_total", "Busy tasks requeued because the runner died or timed out", ["reason"])
+fallback_reviews = Counter("prr_fallback_reviews_total", "Tasks reviewed from the GitHub API diff because the runner could not run")

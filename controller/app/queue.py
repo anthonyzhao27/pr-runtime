@@ -4,13 +4,14 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import boto3
 
 from . import events, github, metrics
 from .config import settings
 from .db import SessionLocal, Task
-from .scheduler import Scheduler
+from .scheduler import Scheduler, finish_check
 
 log = logging.getLogger("queue")
 
@@ -32,6 +33,8 @@ class QueueConsumer:
         self.scheduler = scheduler
         self.sqs = boto3.client("sqs", region_name=settings.aws_region)
         self._stop = threading.Event()
+        # One worker keeps check-run opens in creation order; they serialize in the GitHub bucket anyway.
+        self.checks_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="checks")
 
     def run(self) -> None:
         if not settings.queue_url:
@@ -111,6 +114,13 @@ class QueueConsumer:
                 return dup.id
             if installation_id is None and dup is not None:
                 installation_id = dup.installation_id  # manual reruns inherit the App installation
+            if installation_id is None:
+                # Reruns of PAT-era tasks (and PAT webhooks) post as the App once the repo has been seen through it;
+                # if the App is gone from the repo the token mint fails and github_app falls back to the PAT.
+                prior = (s.query(Task).filter(Task.repo == repo, Task.installation_id.isnot(None))
+                         .order_by(Task.created_at.desc()).first())
+                if prior is not None:
+                    installation_id = prior.installation_id
             t = Task(repo=repo, pr_number=pr_number, head_sha=head_sha, base_sha=base_sha, action=action,
                      delivery=delivery, config=config or settings.default_config, priority=priority,
                      installation_id=installation_id, trigger=trigger if action != "manual" else "manual")
@@ -120,17 +130,35 @@ class QueueConsumer:
             snap = t.to_dict()
         if action not in ("manual", "mention"):
             self.scheduler.supersede(repo, pr_number, task_id)
-        if settings.checks_enabled:
-            # Best effort: a Checks API problem must never block the review itself.
-            try:
-                with SessionLocal() as s:
-                    t = s.get(Task, task_id)
-                    if t is not None and t.installation_id:
-                        t.check_run_id = github.check_start(repo, head_sha, t.installation_id)
-                        s.commit()
-            except Exception:  # noqa: BLE001
-                log.exception("check run bookkeeping failed for %s", task_id)
+        if settings.checks_enabled and installation_id:
+            self.checks_pool.submit(self._open_check, task_id, repo, head_sha, installation_id)
         self.scheduler.enqueue(task_id, priority)
         events.publish("task.created", snap)
         log.info("task %s queued pr#%s %s (%d lines, %s)", task_id, pr_number, head_sha[:8], priority, action)
         return task_id
+
+    def _open_check(self, task_id: str, repo: str, head_sha: str, installation_id: int) -> None:
+        """Open the task's Check run off the ingest path. A check-run POST is a serialized GitHub write (one gap per
+        identity), so doing it inline would meter task creation at ~40/min under a burst. Best effort: a Checks API
+        problem never blocks the review. If the review finished while this waited in the bucket, complete the run
+        now from the stored result instead of leaving it `in_progress` (the poster reads check_run_id fresh after
+        committing `posted`, so exactly one side finishes it)."""
+        try:
+            with github.post_slot(installation_id):
+                cid = github.check_start(repo, head_sha, installation_id)
+                if not cid:
+                    return
+                with SessionLocal() as s:
+                    t = s.get(Task, task_id)
+                    if t is None:
+                        return
+                    t.check_run_id = cid
+                    s.commit()
+                    if t.state == "posted":
+                        finish_check(t)
+                    elif t.state == "failed":
+                        github.check_finish(repo, cid, installation_id, "neutral", "Runner failed", t.error or "")
+                    elif t.state == "superseded":
+                        github.check_finish(repo, cid, installation_id, "neutral", "Superseded", "A newer push replaced this task.")
+        except Exception:  # noqa: BLE001
+            log.exception("check run bookkeeping failed for %s", task_id)

@@ -119,13 +119,29 @@ def load_guidelines(touched: list[str]) -> str:
     return "\n\n".join(parts)
 
 
+def fallback_reason(task: Task) -> str | None:
+    """Set when the runner could not run (private repo, bad ref, crash) and the evidence came from the GitHub API."""
+    fb = (task.meta or {}).get("fallback")
+    return (fb.get("reason") or "runner failed") if fb else None
+
+
+def effective_config(task: Task) -> str:
+    """A fallback task has a diff and files but no test run, so it is reviewed as `diff_only` whatever was requested;
+    `task.config` keeps the requested value (dedupe, eval rows) and `meta.fallback` marks the substitution."""
+    return "diff_only" if fallback_reason(task) else task.config
+
+
 def build_prompt(task: Task) -> str:
     meta = task.meta or {}
     tc = meta.get("toolchain") or {}
+    config = effective_config(task)
     parts = [f"# Pull request #{task.pr_number} in {task.repo}", f"base {task.base_sha[:10]} -> head {task.head_sha[:10]}",
              f"language: {tc.get('language', 'unknown')}" + (f" · test command: `{meta.get('test_command')}`" if meta.get("test_command") else " · no test command detected"), ""]
+    reason = fallback_reason(task)
+    if reason:
+        parts += [f"Tests not run: {reason}. Review is from the diff only; do not assume anything about test results.", ""]
     parts += ["## Diff", "```diff", _clip(task.diff, 60_000), "```", ""]
-    if task.config != "diff_only":
+    if config != "diff_only":
         inst = meta.get("install") or {}
         if inst and inst.get("returncode") not in (None, 0):
             parts += ["## dependency install FAILED (tests below may be meaningless)", "```", _clip(inst.get("output"), 3_000), "```", ""]
@@ -138,7 +154,7 @@ def build_prompt(task: Task) -> str:
         parts += ["## Touched files (head revision)"]
         for path, content in (task.files or {}).items():
             parts += [f"### {path}", "```python", _clip(content, 40_000), "```", ""]
-    if task.config == "guided":
+    if config == "guided":
         g = load_guidelines(task.touched_files or [])
         if g:
             parts += ["## Project review guidelines (distilled from maintainers' past review comments; cite the rule id when a finding applies one)", g, ""]
@@ -156,12 +172,13 @@ def review(task: Task) -> dict:
     t0 = time.monotonic()
     tokens_in = tokens_out = tool_calls = 0
 
-    agentic = task.config == "agentic"
+    config = effective_config(task)
+    agentic = config == "agentic"
     input_items: list = [
         {"role": "system", "content": SYSTEM + (AGENT_SYSTEM_SUFFIX if agentic else "")},
         {"role": "user", "content": build_prompt(task)},
     ]
-    tools = AGENT_TOOLS if agentic else ([READ_FILE_TOOL] if task.config != "diff_only" else [])
+    tools = AGENT_TOOLS if agentic else ([READ_FILE_TOOL] if config != "diff_only" else [])
     budget = settings.agent_max_tool_calls if agentic else settings.read_file_max_calls
 
     while True:

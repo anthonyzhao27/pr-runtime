@@ -7,6 +7,7 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 
 import httpx
 
@@ -17,6 +18,40 @@ from .k8s import RunnerPods
 
 log = logging.getLogger("scheduler")
 WARM_AGE_SECONDS = 10.0
+
+
+def _short_reason(err: str) -> str:
+    """'runner exception: RuntimeError("git clone failed: fatal: ...")' -> 'git clone failed: fatal: ...'."""
+    err = err.strip()
+    if err.startswith("runner exception:"):
+        inner = err.split(":", 1)[1].strip()
+        if "(" in inner and inner.endswith(")"):
+            inner = inner[inner.index("(") + 1:-1].strip("'\"")
+        err = inner
+    return " ".join(err.split())[:300]
+
+
+def evidence_line(t: Task) -> str:
+    """What backs the review: test/lint exit codes, or, on the API-diff fallback, why there are none."""
+    reason = reviewer.fallback_reason(t)
+    if reason:
+        return f"Tests not run: {reason}. Review is from the diff only."
+    return f"pytest exit {t.pytest_rc} · ruff exit {t.ruff_rc}"
+
+
+def finish_check(t: Task) -> None:
+    """Complete a task's Check run from its stored result. Checks API: the bot can block (`failure`) but never
+    approves; merge policy stays with humans/rulesets. Called from the posting slot, or late from queue._open_check
+    when the check run was opened after the review had already posted."""
+    blockers = [f for f in t.findings if f.severity in ("blocker", "major")]
+    conclusion = "failure" if blockers else ("neutral" if t.findings else "success")
+    title = (f"{len(blockers)} blocking finding(s)" if blockers else
+             (f"{len(t.findings)} minor finding(s)" if t.findings else "No findings"))
+    if reviewer.fallback_reason(t):
+        title = f"{title} (tests not run)"
+    text = "\n".join(f"- `{f.path}:{f.line}` **{f.severity}** {f.claim}" for f in t.findings)
+    github.check_finish(t.repo, t.check_run_id, t.installation_id, conclusion, title,
+                        f"{t.summary or ''}\n\n{evidence_line(t)} · model `{t.reviewer_model}`", text)
 
 
 class Scheduler:
@@ -248,15 +283,20 @@ class Scheduler:
                 t.cost_compute_usd = round(settings.compute_usd(timings["runner_total"]), 6)
                 metrics.cost_usd.labels(kind="compute").inc(t.cost_compute_usd)
             t.timings = timings
+            s.commit()
             for k, v in (result.get("timings") or {}).items():
                 metrics.phase_seconds.labels(phase=k).observe(v)
-            if result.get("error"):
-                t.state = "failed"
-                t.error = str(result["error"])[:2000]
-                s.commit()
-                metrics.tasks_total.labels(state="failed").inc()
-                github.check_finish(t.repo, t.check_run_id, t.installation_id, "neutral", "Runner failed", t.error)
-                events.publish("task.updated", t.to_dict())
+            error = result.get("error")
+            args = (t.repo, t.pr_number, t.head_sha, t.installation_id)
+        if error:
+            # The runner could not produce evidence (private repo it cannot clone, bad ref, crash). Keep the task
+            # alive and review from the GitHub API instead; only a failed fetch makes it `failed`. The fetch runs
+            # outside the session so a slow GitHub does not pin a pooled connection.
+            self._fallback_review(task_id, _short_reason(str(error)), *args)
+            return
+        with SessionLocal() as s:
+            t = s.get(Task, task_id)
+            if t is None or t.state == "superseded":
                 return
             t.diff = result.get("diff")
             t.touched_files = result.get("touched_files") or []
@@ -270,6 +310,44 @@ class Scheduler:
             t.state = "reviewing"
             s.commit()
             events.publish("task.updated", t.to_dict())
+        self.review_pool.submit(self._review_and_post, task_id)
+
+    def _fallback_review(self, task_id: str, reason: str, repo: str, pr_number: int, head_sha: str,
+                         installation_id: int | None) -> None:
+        """API-diff fallback: fetch the PR diff, the touched paths and their head contents through the installation
+        token (the controller holds credentials; the runner never does), store them as if a runner had produced them
+        with no test run, and review under `diff_only` semantics. The posted review and the Check say why."""
+        t0 = time.monotonic()
+        try:
+            ctx = github.pr_context(repo, pr_number, head_sha, installation_id)
+        except Exception as e:  # noqa: BLE001
+            log.warning("task %s: runner failed (%s) and the API fallback failed too: %r", task_id, reason[:120], e)
+            with SessionLocal() as s:
+                t = s.get(Task, task_id)
+                if t is None or t.state == "superseded":
+                    return
+                t.state = "failed"
+                t.error = f"{reason} · API fallback failed: {e!r}"[:2000]
+                s.commit()
+                metrics.tasks_total.labels(state="failed").inc()
+                github.check_finish(repo, t.check_run_id, installation_id, "neutral", "Runner failed", t.error)
+                events.publish("task.updated", t.to_dict())
+            return
+        with SessionLocal() as s:
+            t = s.get(Task, task_id)
+            if t is None or t.state == "superseded":
+                return
+            t.diff, t.touched_files, t.files = ctx["diff"], ctx["touched_files"], ctx["files"]
+            t.pytest_rc = t.ruff_rc = None
+            t.pytest_output = t.ruff_output = None
+            t.meta = {"fallback": {"reason": reason, "source": "github_api"}}  # no toolchain: nothing ran
+            t.timings = {**(t.timings or {}), "fallback_fetch": round(time.monotonic() - t0, 3)}
+            t.state = "reviewing"
+            s.commit()
+            metrics.fallback_reviews.inc()
+            events.publish("task.updated", t.to_dict())
+        log.info("task %s pr#%s: runner failed (%s); reviewing from the GitHub API diff (%d files)",
+                 task_id, pr_number, reason[:120], len(ctx["files"]))
         self.review_pool.submit(self._review_and_post, task_id)
 
     def _review_and_post(self, task_id: str) -> None:
@@ -301,44 +379,44 @@ class Scheduler:
             t.findings = [Finding(path=f["path"], line=f.get("line"), severity=f["severity"], claim=f["claim"],
                                   evidence=f.get("evidence")) for f in r.get("findings", [])]
 
-            if settings.post_reviews and t.verdict:
-                t0 = time.monotonic()
-                comments = [{"path": f.path, "line": f.line, "side": "RIGHT",
-                             "body": f"**{f.severity}** — {f.claim}\n\n> {f.evidence}" if f.evidence else f"**{f.severity}** — {f.claim}"}
-                            for f in t.findings if f.line]
-                body = (f"{t.summary}\n\n"
-                        f"_pr-runtime_ · pytest exit {t.pytest_rc} · ruff exit {t.ruff_rc} · "
-                        f"{len(t.findings)} finding(s) · model `{t.reviewer_model}` · config `{t.config}`")
-                try:
-                    t.review_url = github.post_review(t.repo, t.pr_number, t.head_sha, t.verdict, body, comments,
-                                                      installation_id=t.installation_id)
-                    for f in t.findings:
-                        f.posted = bool(t.review_url)
-                    timings["post"] = round(time.monotonic() - t0, 3)
-                    metrics.phase_seconds.labels(phase="post").observe(timings["post"])
-                except Exception as e:  # noqa: BLE001
-                    log.exception("post review failed for %s", task_id)
-                    t.error = f"post failed: {e!r}"[:2000]
-            t.timings = timings
-            t.state = "posted"
-            t.posted_at = now()
-            total = (t.posted_at - t.created_at).total_seconds()
-            timings["total"] = round(total, 3)
-            t.timings = timings
-            s.commit()
-            metrics.time_to_comment.observe(total)
-            metrics.tasks_total.labels(state="posted").inc()
-            # Checks API: the bot can block (failure) but never approves; merge policy stays with humans/rulesets.
-            if t.check_run_id:
-                blockers = [f for f in t.findings if f.severity in ("blocker", "major")]
-                conclusion = "failure" if blockers else ("neutral" if t.findings else "success")
-                title = (f"{len(blockers)} blocking finding(s)" if blockers else
-                         (f"{len(t.findings)} minor finding(s)" if t.findings else "No findings"))
-                text = "\n".join(f"- `{f.path}:{f.line}` **{f.severity}** {f.claim}" for f in t.findings)
-                github.check_finish(t.repo, t.check_run_id, t.installation_id, conclusion, title,
-                                    f"{t.summary or ''}\n\npytest exit {t.pytest_rc} · ruff exit {t.ruff_rc} · model `{t.reviewer_model}`", text)
-            log.info("posted %s pr#%s verdict=%s findings=%d total=%.1fs", task_id, t.pr_number, t.verdict,
-                     len(t.findings), total)
+            posting = settings.post_reviews and bool(t.verdict)
+            # One serialized GitHub slot per task: the review POST and the check-run PATCH are two endpoints but
+            # cost one MIN_POST_GAP between them and the next task, not one each (see github.py).
+            with (github.post_slot(t.installation_id) if posting or t.check_run_id else nullcontext()):
+                if posting:
+                    t0 = time.monotonic()
+                    comments = [{"path": f.path, "line": f.line, "side": "RIGHT",
+                                 "body": f"**{f.severity}** — {f.claim}\n\n> {f.evidence}" if f.evidence else f"**{f.severity}** — {f.claim}"}
+                                for f in t.findings if f.line]
+                    body = (f"{t.summary}\n\n"
+                            f"_pr-runtime_ · {evidence_line(t)} · "
+                            f"{len(t.findings)} finding(s) · model `{t.reviewer_model}` · config `{reviewer.effective_config(t)}`")
+                    try:
+                        t.review_url = github.post_review(t.repo, t.pr_number, t.head_sha, t.verdict, body, comments,
+                                                          installation_id=t.installation_id)
+                        for f in t.findings:
+                            f.posted = bool(t.review_url)
+                        timings["post"] = round(time.monotonic() - t0, 3)
+                        metrics.phase_seconds.labels(phase="post").observe(timings["post"])
+                    except Exception as e:  # noqa: BLE001
+                        log.exception("post review failed for %s", task_id)
+                        t.error = f"post failed: {e!r}"[:2000]
+                t.timings = timings
+                t.state = "posted"
+                t.posted_at = now()
+                total = (t.posted_at - t.created_at).total_seconds()
+                timings["total"] = round(total, 3)
+                t.timings = timings
+                s.commit()
+                metrics.time_to_comment.observe(total)
+                metrics.tasks_total.labels(state="posted").inc()
+                # The check run is opened off the ingest path (queue._open_check) and may not have landed yet; read
+                # the id fresh after committing `posted`, so exactly one side finishes it (see queue._open_check).
+                s.refresh(t, attribute_names=["check_run_id"])
+                if t.check_run_id:
+                    finish_check(t)
+            log.info("posted %s pr#%s verdict=%s findings=%d total=%.1fs%s", task_id, t.pr_number, t.verdict,
+                     len(t.findings), total, " (API-diff fallback)" if reviewer.fallback_reason(t) else "")
             events.publish("task.updated", t.to_dict())
 
     def snapshot(self) -> dict:

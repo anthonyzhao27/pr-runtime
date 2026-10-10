@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from contextlib import contextmanager, nullcontext
 
 import httpx
 
@@ -11,9 +12,70 @@ from .config import settings
 
 log = logging.getLogger("github")
 API = "https://api.github.com"
-_post_lock = threading.Lock()  # GitHub's secondary rate limit punishes concurrent content creation from one identity
-_last_post = 0.0
+MAX_FILE_CHARS = 200_000  # same cap as the runner's touched-file read
+MAX_DIFF_CHARS = 120_000  # runner sends at most MAX_OUTPUT*4 of diff; the prompt clips to 60k anyway
+
+# ---- write serialization ------------------------------------------------------------------------
+# GitHub's secondary rate limit is enforced per identity (per installation token for an App, per user for a PAT)
+# and it punishes two things: concurrent content creation, and more than ~80 POST/PATCH/PUT/DELETE a minute
+# (500 an hour). The Oct 7 burst tripped it with 12 workers posting in parallel, which is why writes are
+# serialized at all. What changed on Oct 10:
+#   * one lock + last-write timestamp per identity bucket (installation id, or "pat" when no installation /
+#     no App). Writes to different installations never wait on each other. Honest limit: every test PR here is
+#     under one installation (anthonyzhao27), so this cannot help a single-tenant burst; it only stops one
+#     tenant's burst from delaying another's.
+#   * MIN_POST_GAP applies between *slots*, not between requests. A task's review POST and its check-run PATCH
+#     are two endpoints but one post_slot(): the task pays one gap, not two. Two back-to-back writes every
+#     ~1.5s + 2 RTT (~2.3s) is ~52 writes/min, under the 80/min ceiling with margin for check-run opens.
+#   * 403/429 with Retry-After or "rate limit"/"abuse" in the body: honour Retry-After (else 60s*attempt),
+#     retry up to 5 times, and log it loudly so a burst that hits the limit is reported, not hidden.
 MIN_POST_GAP = 1.5
+
+
+class _Bucket:
+    __slots__ = ("lock", "last_post")
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.last_post = 0.0
+
+
+_buckets: dict[str, _Bucket] = {}
+_buckets_lock = threading.Lock()  # guards the dict only; each bucket has its own lock
+_tls = threading.local()  # .slot = the bucket this thread currently holds via post_slot(), if any
+
+
+def _bucket(installation_id: int | None) -> _Bucket:
+    key = str(installation_id) if (installation_id and github_app.configured()) else "pat"
+    with _buckets_lock:
+        b = _buckets.get(key)
+        if b is None:
+            b = _buckets[key] = _Bucket()
+        return b
+
+
+def _wait_gap(b: _Bucket) -> None:
+    gap = MIN_POST_GAP - (time.monotonic() - b.last_post)
+    if gap > 0:
+        time.sleep(gap)
+
+
+@contextmanager
+def post_slot(installation_id: int | None):
+    """Hold one serialized write slot for several requests to the same identity: one gap for the slot, then the
+    requests inside go back to back. Re-entrant for the holding thread."""
+    b = _bucket(installation_id)
+    if getattr(_tls, "slot", None) is b:
+        yield
+        return
+    with b.lock:
+        _wait_gap(b)
+        _tls.slot = b
+        try:
+            yield
+        finally:
+            _tls.slot = None
+            b.last_post = time.monotonic()
 
 
 def _headers(installation_id: int | None = None) -> dict:
@@ -26,18 +88,18 @@ def _headers(installation_id: int | None = None) -> dict:
 
 
 def _request(method: str, url: str, installation_id: int | None, **kw) -> httpx.Response:
-    """Serialized write with backoff on GitHub's 403/429 secondary rate limit (honours Retry-After)."""
-    global _last_post
-    with _post_lock:
+    """Serialized write (per identity bucket) with backoff on GitHub's 403/429 secondary rate limit."""
+    b = _bucket(installation_id)
+    held = getattr(_tls, "slot", None) is b
+    with (nullcontext() if held else b.lock):
         for attempt in range(5):
-            gap = MIN_POST_GAP - (time.monotonic() - _last_post)
-            if gap > 0:
-                time.sleep(gap)
+            if not held:
+                _wait_gap(b)
             r = httpx.request(method, url, headers=_headers(installation_id), timeout=30, **kw)
-            _last_post = time.monotonic()
+            b.last_post = time.monotonic()
             if r.status_code in (403, 429) and ("rate limit" in r.text.lower() or "abuse" in r.text.lower() or r.headers.get("Retry-After")):
                 wait = int(r.headers.get("Retry-After", "0")) or min(60 * (attempt + 1), 180)
-                log.warning("GitHub secondary rate limit (attempt %d); sleeping %ss", attempt + 1, wait)
+                log.warning("GitHub secondary rate limit on %s %s (attempt %d); sleeping %ss", method, url, attempt + 1, wait)
                 time.sleep(wait)
                 continue
             return r
@@ -104,6 +166,58 @@ def get_file(repo: str, path: str, ref: str, installation_id: int | None = None)
     except Exception as e:  # noqa: BLE001
         log.warning("get_file %s failed: %s", path, e)
     return None
+
+
+# ---- API-diff fallback (runner could not run: private repo, bad ref, crash) -------------------------------
+
+def pr_diff(repo: str, pr_number: int, installation_id: int | None = None) -> str:
+    r = httpx.get(f"{API}/repos/{repo}/pulls/{pr_number}",
+                  headers={**_headers(installation_id), "Accept": "application/vnd.github.diff"}, timeout=30)
+    r.raise_for_status()
+    return r.text[:MAX_DIFF_CHARS]
+
+
+def pr_files(repo: str, pr_number: int, installation_id: int | None = None) -> list[dict]:
+    """Changed files of a PR (filename, status, additions, deletions), paginated; GitHub stops at 3000."""
+    out: list[dict] = []
+    for page in range(1, 31):
+        r = httpx.get(f"{API}/repos/{repo}/pulls/{pr_number}/files", params={"per_page": 100, "page": page},
+                      headers=_headers(installation_id), timeout=30)
+        r.raise_for_status()
+        batch = r.json()
+        out.extend(batch)
+        if len(batch) < 100:
+            break
+    return out
+
+
+def file_at(repo: str, path: str, ref: str, installation_id: int | None = None) -> str | None:
+    """Raw contents at a ref with the runner's caps: None when missing, binary (NUL in the first 8k) or oversized."""
+    r = httpx.get(f"{API}/repos/{repo}/contents/{path}", params={"ref": ref},
+                  headers={**_headers(installation_id), "Accept": "application/vnd.github.raw+json"}, timeout=30)
+    if r.status_code != 200:
+        return None
+    data = r.content
+    if len(data) > MAX_FILE_CHARS * 2 or b"\0" in data[:8192]:
+        return None
+    return data.decode("utf-8", errors="replace")[:MAX_FILE_CHARS]
+
+
+def pr_context(repo: str, pr_number: int, head_sha: str, installation_id: int | None = None) -> dict:
+    """What the runner would have produced minus the tests: the PR diff, the touched paths and the head contents of
+    the touched files, all through the installation token (so private repos work). Raises on failure; the caller
+    decides what a failed fallback means."""
+    diff = pr_diff(repo, pr_number, installation_id)
+    meta = pr_files(repo, pr_number, installation_id)
+    touched = [f["filename"] for f in meta]
+    files: dict[str, str] = {}
+    for f in meta:
+        if f.get("status") == "removed":
+            continue
+        content = file_at(repo, f["filename"], head_sha, installation_id)
+        if content is not None:
+            files[f["filename"]] = content
+    return {"diff": diff, "touched_files": touched, "files": files}
 
 
 # ---- Checks API (needs a GitHub App; PATs cannot create check runs) ----------------------------
