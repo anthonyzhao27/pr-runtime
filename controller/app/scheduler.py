@@ -379,10 +379,16 @@ class Scheduler:
             metrics.cost_usd.labels(kind="tokens").inc(t.cost_tokens_usd)
             t.findings = [Finding(path=f["path"], line=f.get("line"), severity=f["severity"], claim=f["claim"],
                                   evidence=f.get("evidence")) for f in r.get("findings", [])]
+            # Commit before waiting for the GitHub slot. Assigning `findings` autoflushes the verdict UPDATE, which
+            # holds this row's lock until commit; anything that updates the row while holding the slot (or needs the
+            # slot while holding the row) would then deadlock across a Python lock and a Postgres lock. Seen on the
+            # Oct 10 burst: 32 review threads idle-in-transaction, the check opener stuck on UPDATE, nothing posted.
+            s.commit()
 
             posting = settings.post_reviews and bool(t.verdict)
             # One serialized GitHub slot per task: the review POST and the check-run PATCH are two endpoints but
-            # cost one MIN_POST_GAP between them and the next task, not one each (see github.py).
+            # cost one MIN_POST_GAP between them and the next task, not one each (see github.py). The commit inside
+            # the slot is the only DB work done while holding one, and it waits on no Python lock.
             with (github.post_slot(t.installation_id) if posting or t.check_run_id else nullcontext()):
                 if posting:
                     t0 = time.monotonic()

@@ -144,21 +144,23 @@ class QueueConsumer:
         now from the stored result instead of leaving it `in_progress` (the poster reads check_run_id fresh after
         committing `posted`, so exactly one side finishes it)."""
         try:
-            with github.post_slot(installation_id):
-                cid = github.check_start(repo, head_sha, installation_id)
-                if not cid:
+            # Never touch the DB while holding a GitHub slot: the review thread updates this row inside its own slot,
+            # so a row-lock wait here while holding the slot is a deadlock (Oct 10 burst). check_start takes its own
+            # slot; the late-finish writes below take another, which is rare enough not to matter.
+            cid = github.check_start(repo, head_sha, installation_id)
+            if not cid:
+                return
+            with SessionLocal() as s:
+                t = s.get(Task, task_id)
+                if t is None:
                     return
-                with SessionLocal() as s:
-                    t = s.get(Task, task_id)
-                    if t is None:
-                        return
-                    t.check_run_id = cid
-                    s.commit()
-                    if t.state == "posted":
-                        finish_check(t)
-                    elif t.state == "failed":
-                        github.check_finish(repo, cid, installation_id, "neutral", "Runner failed", t.error or "")
-                    elif t.state == "superseded":
-                        github.check_finish(repo, cid, installation_id, "neutral", "Superseded", "A newer push replaced this task.")
+                t.check_run_id = cid
+                s.commit()
+                if t.state == "posted":
+                    finish_check(t)
+                elif t.state == "failed":
+                    github.check_finish(repo, cid, installation_id, "neutral", "Runner failed", t.error or "")
+                elif t.state == "superseded":
+                    github.check_finish(repo, cid, installation_id, "neutral", "Superseded", "A newer push replaced this task.")
         except Exception:  # noqa: BLE001
             log.exception("check run bookkeeping failed for %s", task_id)
