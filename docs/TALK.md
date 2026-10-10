@@ -1,64 +1,125 @@
-# Talk: "What does it cost to run untrusted PR code per task on Kubernetes?"
+# Talk: pr-runtime (Uncountable onsite, Oct 15, internship)
 
-30 minutes: ~12 talk, ~18 Q&A. Video pre-recorded. Cluster may be down.
+**Slot: 30 minutes total, including Q&A.** Plan for **12 minutes of talk, 4 of video inside it, ~15 of questions.** If they interrupt early, let them; the video and the numbers slide are the two things that must happen.
 
-## Slides (draft)
+The audience is the engineers who built Circus. They are not testing whether you can out-build them. They are testing: can you explain what you made, do you understand your own decisions, did you measure honestly, and what would you do next.
 
-1. **The question.** Agents open PRs faster than humans review them. Every PR wants its own environment: clone, deps, tests, then an LLM reads it. What does a warm pool and an admission layer actually buy under burst, and what does "untrusted" cost?
-2. **Context.** Uncountable's post: Circus = ingress → control plane ranks/admits → warm pod pool → ephemeral pod per task → egress; Rover reviews every PR. "I wanted to measure this shape myself, on a codebase you know (Flask)."
-3. **Architecture.** Diagram from SPEC §2. Call out the trust split: runner has no secrets, no SA token, egress only to GitHub + controller. Controller holds everything. Console = product surface, Grafana = runtime health.
-4. **Demo video (4 min).** Single PR warm path → inline review → console → 20-PR burst → Grafana.
-5. **Numbers.** Cold (KEDA ScaledJob) vs warm (pool) p50/p95 time-to-comment. Wait-for-runner under burst at cap 4 / pool 4 vs pool 8. Where time goes per phase (fetch, pytest, LLM, post). Cost per PR: compute vs tokens.
-6. **Eval.** Recall on green-test bugs (historical vs synthetic, reported separately), red-test bugs, FP rate on 20 real merged changes. Ablation: diff-only vs diff+tests+files.
-7. **What surprised me / what I'd change.** From DECISIONS.md: API GW→SQS header limit; exit-after-one restarts in place; Flask tests are 1s so the pool pre-pays everything; corpus yield; (fill after eval).
+---
 
-## Demo script (video)
+## The 60-second version (memorize this)
 
-Terminal A: `kubectl get pods -n pr-runtime -w` (4 idle runners visible).
-Terminal B: push a green-test bug branch, open PR. Tail controller logs: queued → assigned (warm, 0.7s) → result → LLM → posted.
-Browser: PR inline comment at the exact line. Switch to console task detail: phase bar, finding, thumbs-up.
-Terminal B: `scripts/open_prs.py 20`. Console task list fills live. Grafana: pending spikes, busy pins at cap, idle refills in waves, p95 line.
-Cut to numbers slide.
+> I built a GitHub App that reviews pull requests. When a PR opens, or someone tags `@pr-runtime`, the event goes through API Gateway and a Lambda that checks the signature into a queue. A controller inside an EKS cluster pulls the job and hands it to a warm, throwaway pod that has no secrets: it clones the repo, runs the tests and linter, and reports back. The controller sends the diff and the test evidence to a model and posts inline review comments and a Check run as the bot. Median 24 seconds from PR open to comment.
+>
+> The interesting part was measuring it. I planted 46 real and synthetic bugs in a Flask fork plus 20 clean PRs: the reviewer caught 97.8% with no false positives, and four different amounts of context all tied. Under a burst of 56 PRs, the pods were never the bottleneck; the LLM stage was, and after I autoscaled the pool, GitHub's rate limit on posting was. Your post describes this exact shape, Circus, so I built the reviewer half of it to see what it costs and what it buys.
 
-## Hard questions (answer without notes)
+---
 
-**Trust / sandboxing**
-- Why not gVisor / Firecracker / Kata? → They are the real answer. This is the cheapest layer: no secrets in the pod, no SA token, read-only root, dropped caps, egress allow-list. A kernel exploit still escapes. gVisor is stretch S6.
-- What does your NetworkPolicy *not* stop? → Exfiltration over HTTPS to any host on 443 (we allow 0.0.0.0/0:443 for GitHub). Tightening = resolve GitHub's CIDRs or route clones through an in-cluster proxy. Also DNS tunneling.
-- Malicious `conftest.py` reads the controller's token? → It cannot: the token is not in the pod. It could POST a fake result to the controller, so the controller should authenticate results (per-task nonce). Not done; would be next.
-- Why does the KEDA baseline pod hold AWS creds? → No dispatcher: the Job has to pull its own SQS message. That is the trust leak the controller removes.
+## Slides (12 min)
 
-**Scheduling**
-- How does the controller know a runner is idle? → Pod Ready (readiness = runner reports idle) and not in the controller's assigned set. Readiness flips to 503 the moment a task is accepted.
-- Controller dies mid-task? → In-flight tasks are lost from memory; SQS message was already deleted. DB row stays `running`; a restart could reconcile from the DB (not implemented). SQS visibility timeout protects the un-consumed ones only.
-- New push while a review is in flight? → `supersede`: older tasks for the same PR marked superseded, running pod deleted.
-- Why exit-after-one? And why did it not work? → Ephemeral per task, dirty workdir never reused. A Deployment restarts the *container* in place, so the controller deletes the pod instead; the ReplicaSet refills.
-- Why diff-size ranking? Starvation? → Small PRs first minimizes median wait under burst. Large PRs can starve under sustained load; aging (priority decays with wait) is the fix. Not needed at this scale.
-- Why SQS over NATS? → No NATS to run or secure; the queue doubles as the burst buffer and the webhook sink. NATS wins on latency and fan-out when you have many agent types.
-- Cap M vs pool N? → M bounds concurrent test runs (node CPU). N bounds how many are pre-warmed. N > M means the next wave does not wait for refill. Measured: N=M=4 → second wave waited ~7s.
-- Why on-demand nodes? → Video reliability. Spot interruption mid-pytest = task requeue (attempts<2) and pool shrink; Karpenter + interruption queue is stretch S3.
+| # | Slide | Time | Say |
+|---|---|---|---|
+| 1 | Title + the question | 0:30 | "What does it cost to run untrusted PR code per task on Kubernetes, and what does a warm pool buy?" |
+| 2 | Your post, my shape | 1:00 | Quote the stack row and "every task in its own ephemeral pod, warm pool." "I built the Rover half: review, not fixing." |
+| 3 | System overview image | 2:00 | Walk the 7 numbered steps. Point at the trust split: runner has nothing, controller has everything. |
+| 4 | **Demo video** | 4:00 | Narrate over it (script below). |
+| 5 | Numbers | 2:00 | One table (below). Say the three honest findings out loud. |
+| 6 | Eval | 1:30 | 46 bugs, 20 clean, 97.8%, 0 FP, four configs tie. "Context beyond the diff didn't help on this corpus; the harness was wrong before the model was, twice." |
+| 7 | What I'd do next | 1:00 | Per-installation posting (measured), fallback review for private repos (done), gVisor, a harder corpus. Stop. |
 
-**Reviewer / eval**
-- Why one structured call + read_file, not an agent loop? → Stable to eval, cheap, fast. read_file gets most of the cross-file catching. Loop is stretch S2.
-- Judge is a different model than the reviewer? → Yes: gpt-luna judges, gpt-astra reviews. No self-grading.
-- Why ±15 lines? → Hunk-local tolerance for findings anchored on a neighboring line; semantic judge is the real metric. Report both.
-- How did you build ground truth? → Historical: reverse real upstream fixes onto main; keep tests (red) or revert them too (green). Synthetic: single-operator mutations the suite does not catch. Clean: 20 real merged upstream changes replayed forward. All on the fork.
-- Would you merge on APPROVE? → Not at this FP rate / corpus size. Show the FP rate and say what gate you'd add (tests green + no blocker + human for risky paths).
-- Where did the money go? → Tokens vs compute per PR (fill from eval).
+Keep slides sparse: the image, the table, one chart. Everything else is you talking.
 
-**Full-stack**
-- Why serve the SPA from the controller? → One image, one deployment, same origin, no CORS, no CDN to configure. Separate frontend is a split when the team or deploy cadence demands it.
-- What happens to feedback rows? → Nothing yet. They are the raw material for mined guidelines (S1): thumbs-down findings become negative examples per directory.
-- Postgres in-cluster: what breaks if the node dies? → PVC is EBS in one AZ; pod reschedules in the same AZ or waits. RDS or Multi-AZ for prod.
-- Why Python when Circus is TypeScript? → Python is the backend language here and the runner is Python-shaped (pytest); a TypeScript control plane is a port, not a redesign.
+---
 
-**Infra**
-- Why Terraform over eksctl? → One repo for EKS + SQS + Lambda + IAM + ECR, one destroy.
-- Why Pod Identity, not IRSA? → No OIDC provider juggling; association is one resource per SA.
-- Why Lambda in the ingress path? → API GW's SQS integration can't forward the HMAC header into message attributes (hard limit). Lambda verifies at the edge, so nothing unauthenticated reaches the queue.
-- What did you learn from Slurm that applied here? → Admission/cap, preemption handling, and that capacity is a quota problem before it is a scheduler problem (vCPU quota was 5).
+## Demo video script (4 min, pre-recorded Oct 12, narrated live)
 
-## Numbers so far (Oct 7 night; refresh after final runs)
+| Time | On screen | Say |
+|---|---|---|
+| 0:00 | Terminal: `kubectl get pods -n pr-runtime -w`, four idle runners | "Four warm pods waiting. Each is a disposable test box with no secrets." |
+| 0:20 | Open a PR with a hidden bug (secret-key rotation) | "This PR reverts a real Flask bug fix. Tests stay green." |
+| 0:35 | Controller logs: queued, assigned (warm, <1s), result, LLM, posted | "A runner takes it, runs the suite in 4 seconds, the model reviews." |
+| 1:00 | GitHub: inline comment from `pr-runtime[bot]`, REQUEST_CHANGES, Check run | "Found it, on the line, with a failing Check. CI was green." |
+| 1:20 | Comment `@pr-runtime review` on the click fork PR | "Same thing by mention, on a repo it had never seen. It clones and detects the toolchain." |
+| 1:50 | Console: task detail, phase bar, cost, thumbs-up | "Where the time and money went per task." |
+| 2:10 | `scripts/burst_rerun.py 56` | "Now 56 at once." |
+| 2:20 | Grafana: pending spikes, pool 4→16, spot node appears, in-review climbs | "KEDA scales the pool, Karpenter adds a spot node in 40 seconds, and the next bottleneck shows up." |
+| 3:20 | Numbers slide | "Here's what that bought." |
+
+Backup: if the video file fails, slides 3 and 5 carry the talk. Have screenshots of the PR and the Grafana burst in the deck.
+
+---
+
+## Numbers (the one table)
+
+| scenario | time to comment p50 | p95 | note |
+|---|---|---|---|
+| cold start (KEDA Job per PR, no pool) | ~35s | | the number the pool beats |
+| quiet, warm pool, seed repo | 24s | 72s | runner 4s, LLM 15s, post 2s |
+| quiet, repo never seen (click, 2,238 tests) | 29s | | clone 0.3s, install 4s, tests 13s |
+| 56-PR burst, fixed pool 4 | 70s | 200s | queue wait and LLM stage dominate |
+| 56-PR burst, autoscaled 4→16 + spot node | 165s | 242s | runners faster; serialized GitHub posting became the bottleneck |
+| 56-PR burst, autoscaled + posting as the App | 81s | 143s | one write per review instead of self-review 422 + retry; post wait p50 23s; last review at t+151s |
+
+Eval: 46 bugs (8 historical, 38 synthetic incl. 11 hidden in real multi-file diffs), 20 clean PRs. Strict recall 97.8%, judge-semantic 95.6%, FP 0/20, all four configs. Cost: $0.04–0.26 per review in tokens, ~$0.00004 compute, idle pool $0.16/hr.
+
+**The three honest findings, said plainly:**
+1. The runners were never the bottleneck. Scaling the cheap stage exposed the next one twice.
+2. More context didn't find more bugs on this corpus. The diff was enough. The configs differ only in cost.
+3. The eval harness was wrong before the model was: equivalent mutants, and a "noisy" variant that wasn't noisy because PR diffs come from the merge-base.
+4. My first diagnosis of the posting bottleneck was wrong too: the extra write per task was the PAT-era self-review retry, not the Check. Posting as the App removed it; per-installation buckets can't help a single-tenant burst. Say this one if they ask what you got wrong.
+
+---
+
+## Likely questions (internship level) and short answers
+
+**About the system**
+1. *Walk me through what happens when a PR opens.* → The 60-second version, steps 1–7.
+2. *Why a queue instead of a webhook straight to your service?* → Nothing in the cluster is public. The controller pulls; the Lambda already rejected anything unsigned. The queue also absorbs bursts.
+3. *Why does the runner have no secrets?* → It runs the PR's code. `pytest` imports it; a `conftest.py` can do anything. So the pod can only reach the controller, DNS, and port 443. Verified by trying from inside.
+4. *Why a pod per task and why delete it?* → Fresh workdir every time, nothing leaks between PRs. Deleting is the boundary; a container restart would reuse the pod.
+5. *Why Kubernetes at all for API calls?* → For a pure LLM reviewer you wouldn't. I ran untrusted code per task, which needs isolation, a warm pool, and burst, and that's your platform's shape. Lambda per task would be the other reasonable choice.
+6. *What's KEDA vs Karpenter?* → KEDA sets how many runner pods from my backlog metric; Karpenter adds nodes when those pods don't fit. My controller's admission cap follows the Ready count.
+7. *What happens if a runner dies mid-task?* → The controller sees the pod vanish and requeues immediately. Tested by draining a spot node: one retry, nothing failed.
+8. *What happens if your controller dies?* → State is in Postgres. On boot it re-enqueues running and queued tasks and resumes reviews. Tested: 17 reviews resumed after a restart.
+9. *Can the bot approve a PR?* → Technically yes, it shouldn't. It posts findings and a Check that can block; approval stays with humans or a ruleset.
+10. *How does it work for other repos?* → Install the App. The runner clones on demand and detects the toolchain; Python today, others get a diff-only review. Private repos get an API-diff review because the runner can't clone them.
+
+**About the measurement**
+11. *How do you know it's good?* → The eval. Planted bugs with known lines, strict and judge scoring, clean PRs for false positives.
+12. *What surprised you?* → The three findings above. Pick the posting bottleneck; it's the freshest.
+13. *What would you change?* → A late Check as one completed write (the check opener still trails under burst), stronger isolation (gVisor), a harder corpus with cross-file bugs, private-repo cloning with a scoped token instead of the API-diff fallback.
+
+**About you**
+14. *How much of this did you write?* → Honest answer: I designed it, drove it, and made the calls; a coding agent wrote most of the code, and I own every decision in the DECISIONS log. Say this once, confidently, before they ask.
+15. *What was hardest?* → Not the cluster. Getting honest numbers: every time I fixed the harness the answer changed.
+
+---
+
+## Deep questions (appendix: skim, don't rehearse)
+
+- gVisor/Firecracker vs containers; what NetworkPolicy can't stop (any host on 443).
+- Why SQS over NATS; why diff-size ranking and starvation; cap vs pool size.
+- Spot: why it's fine for 4-second replayable tasks and wrong for the control plane.
+- Pod Identity vs IRSA; EKS access entries; why the driver box needed a security-group rule.
+- Merge-base diffs and why the first noisy corpus wasn't noisy.
+- Why Terraform rolled every node once (module tracks latest AMI; now pinned).
+- Secondary rate limits; per-installation tokens; check-run ids overflow int32.
+- SQLAlchemy pool starved by 32 review workers.
+
+If any of these come up, answer from `docs/DECISIONS.md`; each has an entry.
+
+---
+
+## Day-of checklist
+
+- Video file on the laptop and on a USB stick. Screenshots in the deck as backup.
+- Slides: overview image, numbers table, eval table, next-steps list. Nothing else.
+- Cluster does not need to be up. If it is, `kubectl port-forward` for the console as a bonus.
+- Say the "how much did you write" line yourself, early.
+- When you don't know: "I didn't measure that; here's how I would."
+
+---
+
+## Appendix B: full numbers log (every run, for reference)
 
 | scenario | n | time-to-comment p50 | p95 | wait for runner p50 | runner | LLM p50 / p95 |
 |---|---|---|---|---|---|---|
