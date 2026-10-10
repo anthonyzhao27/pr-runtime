@@ -31,7 +31,7 @@ GitHub App events → API Gateway → Lambda (HMAC) → SQS → controller ─�
 cd infra && terraform apply                       # VPC, EKS (Graviton), SQS, Lambda ingress, ECR, Pod Identity
 $(terraform output -raw update_kubeconfig)
 scripts/sync_secret.sh                            # .env -> k8s Secret (OPENAI_API_KEY, GITHUB_BOT_TOKEN, ...)
-scripts/create_webhook.sh                         # GitHub webhook on the fork -> API Gateway
+# install the GitHub App on the repos to review (https://github.com/apps/pr-runtime); scripts/create_webhook.sh is the no-App fallback
 helm upgrade --install pr-runtime deploy/chart -n pr-runtime
 kubectl port-forward -n pr-runtime svc/controller 18000:8000   # console at http://localhost:18000
 scripts/open_prs.py 20                            # burst
