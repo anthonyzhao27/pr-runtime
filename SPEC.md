@@ -119,7 +119,7 @@ API Gateway (HTTP API) ──► Lambda: verify HMAC, drop pings ──► SQS p
 
 ### 3.7 `dashboards/` Grafana JSON: pending / busy / idle / in-review stats, queue+pool+admission, rejects and cold assigns, time-to-comment p50/p95, wait-for-runner, phase p50, throughput and spend, runner pod counts.
 
-### 3.8 `docs/` `DECISIONS.md` (the Q&A study guide, ~30 entries), `TALK.md` (outline, demo script, hard questions, numbers).
+### 3.8 `docs/` `ONBOARDING.md` (k8s/AWS/networking primer, read first), `DECISIONS.md` (the Q&A study guide, ~30 entries), `TALK.md` (outline, demo script, hard questions, numbers).
 
 ### 3.9 Driver box + `scripts/`
 - `scripts/driver.sh '<cmd>'` runs on the driver via SSM (base64 transport; `--bg`/`--get`). `driver_env.sh` materializes `.env` from Secrets Manager and logs `gh` in. `Makefile`: `build-controller`, `build-runner`, `push`, `rollout`, `eval-env`.
@@ -207,7 +207,7 @@ pr-runtime/
   deploy/karpenter    EC2NodeClass + NodePool
   deploy/monitoring   kube-prometheus-stack values
   dashboards/         Grafana JSON
-  docs/               DECISIONS.md, TALK.md
+  docs/               ONBOARDING.md, DECISIONS.md, TALK.md
   scripts/            driver.sh, driver_env.sh, create_webhook.sh, sync_secret.sh, open_prs.py, publish_eval.sh, publish_guidelines.sh, smoke_rerun.sh
 ```
 

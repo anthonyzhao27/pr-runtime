@@ -13,6 +13,7 @@ GitHub webhook → API Gateway → Lambda (HMAC) → SQS → controller ─┬�
 ```
 
 - `SPEC.md` — design, decisions table, schedule, stretch list
+- `docs/ONBOARDING.md` — the Kubernetes / AWS / networking primer to read first
 - `docs/DECISIONS.md` — what broke and why
 - `docs/TALK.md` — talk outline and Q&A prep
 - `infra/` Terraform · `controller/` FastAPI control plane · `runner/` untrusted executor · `console/` React UI
