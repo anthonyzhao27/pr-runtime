@@ -255,6 +255,26 @@ def check_finish(repo: str, check_run_id: int | None, installation_id: int | Non
         log.warning("check_finish failed: %s", e)
 
 
+def check_create_completed(repo: str, head_sha: str, installation_id: int | None, conclusion: str, title: str,
+                           summary: str, text: str = "") -> int | None:
+    """Create a check run that is already completed: one write instead of open + finish, for the case where the
+    review posted before the run could be opened."""
+    if not (settings.checks_enabled and installation_id and github_app.configured()):
+        return None
+    try:
+        r = _request("POST", f"{API}/repos/{repo}/check-runs", installation_id, json={
+            "name": "pr-runtime", "head_sha": head_sha, "status": "completed", "conclusion": conclusion,
+            "output": {"title": title[:255], "summary": summary[:65_000], "text": text[:65_000]},
+        })
+        if r.status_code >= 400:
+            log.warning("check_create_completed %s: %s", r.status_code, r.text[:300])
+        r.raise_for_status()
+        return r.json()["id"]
+    except Exception as e:  # noqa: BLE001
+        log.warning("check_create_completed failed: %s", e)
+        return None
+
+
 def react(repo: str, comment_id: int, installation_id: int | None, content: str = "eyes") -> None:
     """Acknowledge a mention with a reaction on the comment that triggered it."""
     try:

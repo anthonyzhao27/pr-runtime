@@ -40,10 +40,10 @@ def evidence_line(t: Task) -> str:
     return f"pytest exit {t.pytest_rc} · ruff exit {t.ruff_rc}"
 
 
-def finish_check(t: Task) -> None:
-    """Complete a task's Check run from its stored result. Checks API: the bot can block (`failure`) but never
-    approves; merge policy stays with humans/rulesets. Called from the posting slot, or late from queue._open_check
-    when the check run was opened after the review had already posted."""
+def finish_check(t: Task, create: bool = False) -> int | None:
+    """Complete a task's Check run from its stored result (`create=True`: create it already completed, one write).
+    Checks API: the bot can block (`failure`) but never approves; merge policy stays with humans/rulesets. Called
+    from the posting slot, or late from queue._open_check when the review posted before the run was opened."""
     blockers = [f for f in t.findings if f.severity in ("blocker", "major")]
     conclusion = "failure" if blockers else ("neutral" if t.findings else "success")
     title = (f"{len(blockers)} blocking finding(s)" if blockers else
@@ -51,8 +51,11 @@ def finish_check(t: Task) -> None:
     if reviewer.fallback_reason(t):
         title = f"{title} (tests not run)"
     text = "\n".join(f"- `{f.path}:{f.line}` **{f.severity}** {f.claim}" for f in t.findings)
-    github.check_finish(t.repo, t.check_run_id, t.installation_id, conclusion, title,
-                        f"{t.summary or ''}\n\n{evidence_line(t)} · model `{t.reviewer_model}`", text)
+    summary = f"{t.summary or ''}\n\n{evidence_line(t)} · model `{t.reviewer_model}`"
+    if create:
+        return github.check_create_completed(t.repo, t.head_sha, t.installation_id, conclusion, title, summary, text)
+    github.check_finish(t.repo, t.check_run_id, t.installation_id, conclusion, title, summary, text)
+    return t.check_run_id
 
 
 class Scheduler:
@@ -389,9 +392,9 @@ class Scheduler:
             # One serialized GitHub slot per task: the review POST and the check-run PATCH are two endpoints but
             # cost one MIN_POST_GAP between them and the next task, not one each (see github.py). The commit inside
             # the slot is the only DB work done while holding one, and it waits on no Python lock.
+            t0 = time.monotonic()  # `post` = wait for the slot + the writes; the wait is the number that matters under burst
             with (github.post_slot(t.installation_id) if posting or t.check_run_id else nullcontext()):
                 if posting:
-                    t0 = time.monotonic()
                     comments = [{"path": f.path, "line": f.line, "side": "RIGHT",
                                  "body": f"**{f.severity}** — {f.claim}\n\n> {f.evidence}" if f.evidence else f"**{f.severity}** — {f.claim}"}
                                 for f in t.findings if f.line]

@@ -147,6 +147,17 @@ class QueueConsumer:
             # Never touch the DB while holding a GitHub slot: the review thread updates this row inside its own slot,
             # so a row-lock wait here while holding the slot is a deadlock (Oct 10 burst). check_start takes its own
             # slot; the late-finish writes below take another, which is rare enough not to matter.
+            with SessionLocal() as s:
+                t = s.get(Task, task_id)
+                if t is None:
+                    return
+                if t.state == "posted":
+                    # Under a burst the 32 review threads out-compete this one worker for the bucket (the lock is not
+                    # fair), so by the time an open gets its slot the review is often already up. Then create the
+                    # run completed in one write instead of open + finish in two.
+                    t.check_run_id = finish_check(t, create=True)
+                    s.commit()
+                    return
             cid = github.check_start(repo, head_sha, installation_id)
             if not cid:
                 return
@@ -157,7 +168,7 @@ class QueueConsumer:
                 t.check_run_id = cid
                 s.commit()
                 if t.state == "posted":
-                    finish_check(t)
+                    finish_check(t)  # lost the race with the poster between the state read above and this commit
                 elif t.state == "failed":
                     github.check_finish(repo, cid, installation_id, "neutral", "Runner failed", t.error or "")
                 elif t.state == "superseded":
