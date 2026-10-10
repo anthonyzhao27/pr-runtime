@@ -15,6 +15,18 @@ from .scheduler import Scheduler
 log = logging.getLogger("queue")
 
 
+def repo_mode(repo: str, ref: str, installation_id: int | None) -> str:
+    """'auto' (review every PR) or 'mention' (only when @-tagged). Read from .pr-runtime.yml at the PR head."""
+    text = github.get_file(repo, ".pr-runtime.yml", ref, installation_id) or github.get_file(repo, ".pr-runtime.yaml", ref, installation_id)
+    if not text:
+        return "auto"
+    for line in text.splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line.startswith("mode:"):
+            return line.split(":", 1)[1].strip().strip("'\"") or "auto"
+    return "auto"
+
+
 class QueueConsumer:
     def __init__(self, scheduler: Scheduler) -> None:
         self.scheduler = scheduler
@@ -59,9 +71,9 @@ class QueueConsumer:
             if "pull_request" not in issue or settings.mention_handle.lower() not in (comment.get("body") or "").lower():
                 return
             metrics.events_total.labels(action="mention").inc()
-            if repo not in settings.repos:
+            if not settings.repo_allowed(repo):
                 github.comment(repo, issue["number"], installation_id,
-                               f"{settings.mention_handle} is not configured for `{repo}` yet (only: {', '.join(settings.repos)}).")
+                               f"{settings.mention_handle} is not enabled for `{repo}` (allowlist: {', '.join(settings.repos)}).")
                 return
             github.react(repo, comment["id"], installation_id, "eyes")
             shas = github.pr_head(repo, issue["number"], installation_id)
@@ -74,8 +86,12 @@ class QueueConsumer:
         pr = body.get("pull_request") or {}
         if not pr or action in settings.ignore_actions:
             return
-        if repo not in settings.repos:
-            log.info("ignoring %s event from unconfigured repo %s", action, repo)
+        if not settings.repo_allowed(repo):
+            log.info("ignoring %s event from unlisted repo %s", action, repo)
+            return
+        # Per-repo policy: `.pr-runtime.yml` with `mode: mention` means only review when tagged.
+        if repo_mode(repo, pr["head"]["sha"], installation_id) == "mention":
+            log.info("repo %s is in mention mode; ignoring auto event for pr#%s", repo, pr["number"])
             return
         metrics.events_total.labels(action=action).inc()
         self.create_task(repo=repo, pr_number=pr["number"], head_sha=pr["head"]["sha"], base_sha=pr["base"]["sha"],

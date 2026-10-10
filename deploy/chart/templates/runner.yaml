@@ -33,6 +33,8 @@ spec:
               value: http://controller:8000
             - name: TASK_DEADLINE_SECONDS
               value: {{ .Values.controller.taskDeadlineSeconds | quote }}
+            - name: SEED_REPO
+              value: {{ .Values.runner.seedRepo | default "anthonyzhao27/flask" | quote }}
           readinessProbe:
             httpGet: { path: /healthz, port: 8080 }
             periodSeconds: 2

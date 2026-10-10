@@ -13,8 +13,8 @@ from .db import Task
 
 log = logging.getLogger("reviewer")
 
-SYSTEM = """You are a strict, fast code reviewer for the Flask web framework repository.
-You receive a pull request diff, the full contents of touched files, the pytest result, and the ruff result.
+SYSTEM = """You are a strict, fast code reviewer.
+You receive a pull request diff, the full contents of touched files, and (when available) the test and lint results.
 Your job: find real defects introduced or exposed by this change. Logic errors, broken invariants, wrong
 return values, exception handling mistakes, security issues, behavior changes not covered by tests.
 Prefer precision over volume: report only findings you can justify from the code. Each finding must point at a
@@ -120,11 +120,21 @@ def load_guidelines(touched: list[str]) -> str:
 
 
 def build_prompt(task: Task) -> str:
-    parts = [f"# Pull request #{task.pr_number} in {task.repo}", f"base {task.base_sha[:10]} -> head {task.head_sha[:10]}", ""]
+    meta = task.meta or {}
+    tc = meta.get("toolchain") or {}
+    parts = [f"# Pull request #{task.pr_number} in {task.repo}", f"base {task.base_sha[:10]} -> head {task.head_sha[:10]}",
+             f"language: {tc.get('language', 'unknown')}" + (f" · test command: `{meta.get('test_command')}`" if meta.get("test_command") else " · no test command detected"), ""]
     parts += ["## Diff", "```diff", _clip(task.diff, 60_000), "```", ""]
     if task.config != "diff_only":
-        parts += [f"## pytest (exit {task.pytest_rc})", "```", _clip(task.pytest_output, 8_000), "```", ""]
-        parts += [f"## ruff (exit {task.ruff_rc})", "```", _clip(task.ruff_output, 3_000), "```", ""]
+        inst = meta.get("install") or {}
+        if inst and inst.get("returncode") not in (None, 0):
+            parts += ["## dependency install FAILED (tests below may be meaningless)", "```", _clip(inst.get("output"), 3_000), "```", ""]
+        if task.pytest_rc is None:
+            parts += ["## tests", "_no test command detected for this repo; review from the diff and files only_", ""]
+        else:
+            parts += [f"## tests (exit {task.pytest_rc})", "```", _clip(task.pytest_output, 8_000), "```", ""]
+        if task.ruff_rc is not None:
+            parts += [f"## lint (exit {task.ruff_rc})", "```", _clip(task.ruff_output, 3_000), "```", ""]
         parts += ["## Touched files (head revision)"]
         for path, content in (task.files or {}).items():
             parts += [f"### {path}", "```python", _clip(content, 40_000), "```", ""]

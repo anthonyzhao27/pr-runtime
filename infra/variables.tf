@@ -33,3 +33,9 @@ variable "node_max" {
   type    = number
   default = 6
 }
+
+variable "node_ami_release" {
+  description = "EKS-optimized AL2023 AMI release for the managed node group. Bump deliberately; a change rolls all nodes."
+  type        = string
+  default     = "1.34.11-20261003"
+}

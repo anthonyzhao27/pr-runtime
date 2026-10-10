@@ -89,7 +89,7 @@ spec:
             - name: PRICE_OUTPUT_PER_M
               value: {{ .Values.controller.priceOutputPerM | default "50.0" | quote }}
             - name: REPOS
-              value: {{ .Values.controller.repos | default "anthonyzhao27/flask" | quote }}
+              value: {{ .Values.controller.repos | default "" | quote }}
             - name: MENTION_HANDLE
               value: {{ .Values.controller.mentionHandle | default "@pr-runtime" | quote }}
             - name: CHECKS_ENABLED

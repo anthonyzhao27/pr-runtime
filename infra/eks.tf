@@ -37,6 +37,8 @@ module "eks" {
       instance_types = [var.node_instance_type]
       ami_type       = "AL2023_ARM_64_STANDARD"
       capacity_type  = "ON_DEMAND"
+      # Pin the AMI release: the module otherwise tracks the latest and a routine `apply` rolls every node.
+      ami_release_version = var.node_ami_release
 
       min_size     = var.node_count
       max_size     = var.node_max

@@ -135,7 +135,8 @@ class Scheduler:
             t = s.get(Task, task_id)
             if t is None or t.state not in ("queued",):
                 return
-            payload = {"task_id": t.id, "head_sha": t.head_sha, "base_sha": t.base_sha, "pr_number": t.pr_number}
+            payload = {"task_id": t.id, "head_sha": t.head_sha, "base_sha": t.base_sha, "pr_number": t.pr_number,
+                       "repo": t.repo, "clone_url": f"https://github.com/{t.repo}.git"}
             try:
                 r = httpx.post(f"http://{pod['ip']}:{settings.runner_port}/task", json=payload, timeout=5)
                 r.raise_for_status()
@@ -230,6 +231,8 @@ class Scheduler:
             t.pytest_output = (result.get("pytest") or {}).get("output")
             t.ruff_rc = (result.get("ruff") or {}).get("returncode")
             t.ruff_output = (result.get("ruff") or {}).get("output")
+            t.meta = {"toolchain": result.get("toolchain") or {}, "install": result.get("install") or {},
+                      "workdir": result.get("workdir"), "test_command": (result.get("pytest") or {}).get("command")}
             t.state = "reviewing"
             s.commit()
             events.publish("task.updated", t.to_dict())

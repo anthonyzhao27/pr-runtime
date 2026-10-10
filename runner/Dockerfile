@@ -10,7 +10,14 @@ COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
 
 ARG REPO_URL=https://github.com/anthonyzhao27/flask.git
 ARG REF=main
-ENV UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never UV_CACHE_DIR=/work/.uv-cache HOME=/work
+# SEED_REPO is the one repo baked in for the warm path; any other repo is partial-cloned on demand.
+ENV UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never UV_CACHE_DIR=/work/.uv-cache HOME=/work \
+    SEED_DIR=/opt/seed/flask SEED_REPO=anthonyzhao27/flask WORK_ROOT=/work \
+    UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/opt/uv-tools/bin PATH=/opt/uv-tools/bin:$PATH
+
+# ruff as a uv tool so `uvx ruff` / `ruff` work offline for any repo.
+RUN mkdir -p /opt/uv-tools && chown -R 1000:1000 /opt/uv-tools
+RUN UV_CACHE_DIR=/tmp/uv-cache uv tool install --quiet ruff && rm -rf /tmp/uv-cache
 
 RUN mkdir -p /opt/seed /work && chown -R 1000:1000 /opt/seed /work
 USER 1000

@@ -62,6 +62,7 @@ class Task(Base):
     installation_id: Mapped[int | None] = mapped_column(Integer, nullable=True)   # GitHub App installation
     check_run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)      # Checks API run for this task
     trigger: Mapped[str] = mapped_column(String(16), default="webhook")           # webhook | mention | manual
+    meta: Mapped[dict] = mapped_column(JSON, default=dict)                        # toolchain, install result, workdir source
 
     findings: Mapped[list["Finding"]] = relationship(back_populates="task", cascade="all, delete-orphan")
 
@@ -79,6 +80,7 @@ class Task(Base):
             "touched_files": self.touched_files or [], "findings_count": len(self.findings),
             "cost_compute_usd": self.cost_compute_usd, "cost_tokens_usd": self.cost_tokens_usd,
             "installation_id": self.installation_id, "check_run_id": self.check_run_id, "trigger": self.trigger,
+            "meta": self.meta or {},
         }
         if full:
             d.update({
@@ -141,6 +143,7 @@ MIGRATIONS = [
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS installation_id INTEGER",
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS check_run_id INTEGER",
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS trigger VARCHAR(16) DEFAULT 'webhook'",
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS meta JSON DEFAULT '{}'",
 ]
 
 

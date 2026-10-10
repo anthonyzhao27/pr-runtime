@@ -41,7 +41,10 @@ class Settings:
     pool_size: int = _int("POOL_SIZE", 4)
     guidelines_dir: str = os.environ.get("GUIDELINES_DIR", "/guidelines")
     # Multi-repo (S8): events from repos not listed here are ignored (or answered with a "not configured" comment).
-    repos: tuple[str, ...] = tuple(r.strip() for r in os.environ.get("REPOS", "anthonyzhao27/flask").split(",") if r.strip())
+    repos: tuple[str, ...] = tuple(r.strip() for r in os.environ.get("REPOS", "").split(",") if r.strip())  # empty = any installed repo
+
+    def repo_allowed(self, repo: str) -> bool:
+        return not self.repos or repo in self.repos
     mention_handle: str = os.environ.get("MENTION_HANDLE", "@pr-runtime")
     checks_enabled: bool = os.environ.get("CHECKS_ENABLED", "true").lower() == "true"
 
