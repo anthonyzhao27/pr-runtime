@@ -72,6 +72,8 @@ Cost: ~$0.04–0.06 tokens per average review, $0.21 for a 19k-token one; comput
 Agentic (grep/read_file/list_dir, 15 calls): 45/46 strict, 43/46 semantic, 24k tokens/PR ($0.26) vs 11k ($0.11) for full, p50 145s vs 58s. Exploration = pure cost on this corpus.
 Four-way: diff_only ≈ full ≈ guided ≈ agentic on recall (97.8% strict); they differ only in cost/latency.
 Karpenter: pool 4→16, node Ready in 41s, 16 runners in 49s; spot c7g.2xlarge after creating the Spot service-linked role. Drain mid-task: lost pod detected, task requeued, posted on attempt 2 (50s), 0 failed.
+Multi-repo (pallets/click, never seen): clone 0.4s, install 3.0s, 2,238 tests 14.7s, 18.7s total vs ~4s on the warm Flask seed.
+GitHub App: reviews as pr-runtime[bot], Check run per task (blocks on blockers, never approves), @pr-runtime mention trigger.
 Tokens: ~4k in / 0.4k out per review. 112 reviews ≈ 0.45M input tokens.
 
 Talking points from these: under burst, the runner is never the bottleneck (4s); queue wait (cap) and the LLM stage are. Pool N > cap M removes the refill wait; a separate LLM concurrency knob removes the review backlog. Cold vs warm matters most at the *first* wave; after that it is a throughput question.

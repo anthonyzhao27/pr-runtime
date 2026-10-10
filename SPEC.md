@@ -24,7 +24,7 @@ Each row: what we chose, what we rejected, and the one-sentence Q&A answer.
 | 6 | Trust boundary | **Split.** Runner pod has zero secrets, clones the public fork anonymously, runs tests, POSTs results back. Controller holds all secrets (from Secrets Manager), calls the LLM, posts the review, and serves a read-only git mirror for the agentic tools. | Runner does everything | "A malicious `conftest.py` can exfiltrate anything the pod can see. So the pod sees nothing." |
 | 7 | Pod hardening | `runAsNonRoot`, `readOnlyRootFilesystem` + `/work` emptyDir (seed clone copied in at boot), `automountServiceAccountToken: false`, drop all caps, CPU/mem limits, controller-enforced deadline, NetworkPolicy: ingress only from controller; egress only to controller, DNS, and **any host on 443 except RFC1918 and IMDS** (GitHub's CIDRs are not fixed) | Default pod spec | "Not a sandbox. gVisor or Firecracker is the real answer; this is the cheapest layer that stops the obvious attack. The 443 allow-list is the hole." |
 | 8 | LLM step **(extended)** | Structured call (JSON schema) with `reasoning.effort=high`. Four configs: `diff_only`; `full` (+ touched files + pytest/ruff + `read_file` ≤5); `guided` (full + mined guidelines); `agentic` (full + `read_file`/`grep`/`list_dir` against the mirror, ≤15 calls) | Single config | "Single structured call keeps the eval stable. Everything else is an ablation arm, and none of them beat the diff on this corpus." |
-| 9 | Output **(extended)** | Inline review comments via GitHub Reviews API + `APPROVE` / `REQUEST_CHANGES` verdict; when the reviewer identity authored the PR, GitHub forbids a verdict, so it posts a `COMMENT` with the verdict in the body | One summary comment | "file:line precision is the whole point; a blob comment hides whether it actually found the bug." |
+| 9 | Output **(extended)** | Inline review comments via GitHub Reviews API + `APPROVE` / `REQUEST_CHANGES` verdict as `pr-runtime[bot]`, plus a **Check run** (`failure` on blockers, never approves). PAT fallback downgrades to `COMMENT` when the reviewer authored the PR | One summary comment | "file:line precision is the whole point; a blob comment hides whether it actually found the bug." |
 | 10 | Test selection | Full `pytest` every time | Affected-tests only | "Suite is 1-3 seconds. Selection logic is a bug farm I didn't need." |
 | 11 | Models | Reviewer: `gpt-6-astra`, effort high. Judge: `gpt-6-luna`. IDs pinned in Helm values, logged per task. | Same model for both | "Judge is a different, 100× cheaper model so the reviewer isn't grading itself." |
 | 12 | Eval ground truth **(changed)** | 46 bugs: 8 historical reverted Flask fixes (red + green variants; green variants hide the test removal in a base branch), 22 synthetic single-operator mutants the suite does not catch, 10 red mutants, 11 "noisy" mutants hidden inside a real multi-file upstream diff; 20 real merged upstream changes replayed as clean PRs. Equivalent mutants excluded. Strict (±15 lines) and judge-semantic scoring. | 30 historical only (history yields ~8 usable); hand-labeled bugs | "Historical = bugs maintainers actually shipped. Synthetic = defects nothing tests. The harness was wrong more often than the reviewer." |
@@ -35,6 +35,8 @@ Each row: what we chose, what we rejected, and the one-sentence Q&A answer.
 | 17 | Secrets **(changed)** | **Secrets Manager** (`pr-runtime/app`) read by the controller at boot via Pod Identity. k8s Secret from `.env` remains only for Postgres's own password. Driver box materializes `.env` from the same secret. | k8s Secret into the controller (the 6-day answer, replaced on day 2) | "Nothing is mounted into the controller; it assumes a role and reads one secret. Caveat: values are seeded from `.env` by Terraform, so they sit in local state." |
 | 18 | Task console (full-stack) | React 18 + Vite + TypeScript SPA built in the controller image and served by FastAPI; JSON API + SSE; Postgres for tasks/findings/feedback; cost column; Eval page reads a published summary | FastAPI + Jinja + HTMX; custom "observability dashboard" | "Grafana owns runtime health. The console is the product surface: what did the reviewer find, was it right, re-run it. Thumbs-down is how engineers teach the reviewer." |
 | 19 | Database **(changed)** | Postgres 16 (`postgres:16-alpine`) as a StatefulSet in our own Helm chart, 8Gi gp3 PVC via EBS CSI | `bitnami/postgresql` (image-tag churn); RDS; SQLite | "Their DB, in-cluster, no extra AWS bill. RDS is the prod answer." |
+| 23 | GitHub App **(new, S4)** | App auth: JWT → per-installation 1h tokens; triggers: every PR or `@pr-runtime` mention; `.pr-runtime.yml` `mode:` per repo | Repo webhook + PAT (kept as fallback) | "Install once, any repo; least-privilege short-lived tokens; the bot blocks via a required check and never approves." |
+| 24 | Multi-repo **(new, S8)** | Runner clones any repo on demand, detects the toolchain (uv/pip/npm/go) or reads `.pr-runtime.yml`; seed repo stays warm | Flask-only baked image | "Click, never seen before: clone 0.4s, install 3s, tests 15s. The warm clone buys ~15s, almost all of it the test suite." |
 | 20 | Framing | Infra-question framing with eval as second act. Name Circus on slide 2. | "I built an AI code reviewer" | "You wrote about X. I wanted to measure Y for myself." |
 | 21 | Driver box **(new)** | `t4g.large` arm64 EC2 in a private subnet, SSM only, cluster-admin via EKS access entry; all image builds and eval runs happen there (`scripts/driver.sh`) | Building and running evals on the laptop (it kernel-panicked from memory pressure on Oct 8) | "The thing that must stay up should not be the thing you close the lid on." |
 | 22 | Cost model **(new)** | Per task: compute = runner seconds × node $/hr × CPU share; tokens at list price; standing pool $/hr | None | "Tokens are 1000× the compute. Four idle runners cost $0.16/hr ≈ 2,000 reviews' worth of tokens per month." |
@@ -224,8 +226,8 @@ pr-runtime/
 ### S3. Karpenter — DONE
 Burst NodePool on top of the fixed floor; 4→16 runners in 49s; spot after creating the Spot service-linked role; drain mid-task → lost-pod requeue, 0 failed. Controller and Postgres pinned to the floor after the drain evicted the controller once.
 
-### S4. Dedicated bot identity — not started (~1 hour, needs an account)
-GitHub App or bot account so verdicts post as APPROVE/REQUEST_CHANGES instead of COMMENT; per-installation rate limits.
+### S4. GitHub App — DONE 10/10
+JWT → installation tokens, `pr-runtime[bot]` identity, `@pr-runtime` mention trigger, Check runs, per-repo `mode:`. Repo webhook + PAT kept as fallback.
 
 ### S5. Cost model per PR — DONE
 Compute vs tokens per task, standing pool $/hr, in metrics, console, scorer.
@@ -236,8 +238,8 @@ The real answer to "is this a sandbox"; measure the pytest slowdown.
 ### S7. Live-instance screenshots in the review — not started (~half day)
 Mirror Rover's "screenshots from a live instance of its own branch."
 
-### S8. Multi-repo — not started (~half day)
-Repo slug from the webhook; clone-on-boot image; measures what the warm clone actually buys.
+### S8. Multi-repo — DONE 10/10
+Clone on demand, toolchain detection, `.pr-runtime.yml` overrides, generic prompt. Measured on pallets/click: 18.7s cold vs ~4s warm. Private repos and node/go binaries not done.
 
 ### S9. Secrets Manager + Pod Identity — DONE
 Controller boots from `pr-runtime/app`; no k8s Secret mounted into it.
