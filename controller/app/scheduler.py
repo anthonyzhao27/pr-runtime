@@ -28,6 +28,7 @@ def _short_reason(err: str) -> str:
         if "(" in inner and inner.endswith(")"):
             inner = inner[inner.index("(") + 1:-1].strip("'\"")
         err = inner
+    err = err.replace("\\n", " ").replace("\\t", " ")  # repr() of the runner's message escapes its newlines
     return " ".join(err.split())[:300]
 
 
