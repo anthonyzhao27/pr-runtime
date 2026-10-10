@@ -61,17 +61,21 @@ class Scheduler:
         with SessionLocal() as s:
             running = s.query(Task).filter(Task.state == "running").all()
             reviewing = s.query(Task).filter(Task.state == "reviewing").all()
+            queued = s.query(Task).filter(Task.state == "queued").all()
             for t in running:
                 t.state = "queued"
                 t.error = f"controller restarted while running on {t.runner_pod}; requeued"
                 t.runner_pod = None
             s.commit()
-            for t in running:
+            # Anything the database says is queued but memory does not know about (restart, or a crash
+            # between the insert and the enqueue) goes back on the heap.
+            for t in running + queued:
                 self.enqueue(t.id, t.priority)
             for t in reviewing:
                 self.review_pool.submit(self._review_and_post, t.id)
-        if running or reviewing:
-            log.info("reconciled after restart: %d running requeued, %d reviews resumed", len(running), len(reviewing))
+        if running or reviewing or queued:
+            log.info("reconciled after restart: %d running requeued, %d queued re-enqueued, %d reviews resumed",
+                     len(running), len(queued), len(reviewing))
         # Any pod that is Ready but not assigned is idle by definition; stale 'done' pods are unready and get cleaned up.
         for p in self.pods.list_ready():
             pass

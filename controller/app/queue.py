@@ -121,11 +121,15 @@ class QueueConsumer:
         if action not in ("manual", "mention"):
             self.scheduler.supersede(repo, pr_number, task_id)
         if settings.checks_enabled:
-            with SessionLocal() as s:
-                t = s.get(Task, task_id)
-                if t is not None and t.installation_id:
-                    t.check_run_id = github.check_start(repo, head_sha, t.installation_id)
-                    s.commit()
+            # Best effort: a Checks API problem must never block the review itself.
+            try:
+                with SessionLocal() as s:
+                    t = s.get(Task, task_id)
+                    if t is not None and t.installation_id:
+                        t.check_run_id = github.check_start(repo, head_sha, t.installation_id)
+                        s.commit()
+            except Exception:  # noqa: BLE001
+                log.exception("check run bookkeeping failed for %s", task_id)
         self.scheduler.enqueue(task_id, priority)
         events.publish("task.created", snap)
         log.info("task %s queued pr#%s %s (%d lines, %s)", task_id, pr_number, head_sha[:8], priority, action)

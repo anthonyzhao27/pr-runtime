@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 
 from .config import settings
@@ -59,8 +59,8 @@ class Task(Base):
     cold: Mapped[bool] = mapped_column(Boolean, default=False)  # true when no warm runner was available
     cost_compute_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     cost_tokens_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
-    installation_id: Mapped[int | None] = mapped_column(Integer, nullable=True)   # GitHub App installation
-    check_run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)      # Checks API run for this task
+    installation_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)   # GitHub App installation
+    check_run_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)      # Checks API run ids exceed int32
     trigger: Mapped[str] = mapped_column(String(16), default="webhook")           # webhook | mention | manual
     meta: Mapped[dict] = mapped_column(JSON, default=dict)                        # toolchain, install result, workdir source
 
@@ -144,6 +144,8 @@ MIGRATIONS = [
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS check_run_id INTEGER",
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS trigger VARCHAR(16) DEFAULT 'webhook'",
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS meta JSON DEFAULT '{}'",
+    "ALTER TABLE tasks ALTER COLUMN check_run_id TYPE BIGINT",
+    "ALTER TABLE tasks ALTER COLUMN installation_id TYPE BIGINT",
 ]
 
 
