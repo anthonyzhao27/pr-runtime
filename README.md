@@ -13,7 +13,8 @@ GitHub webhook → API Gateway → Lambda (HMAC) → SQS → controller ─┬�
 ```
 
 - `SPEC.md` — design, decisions table, schedule, stretch list
-- `docs/CRASH-COURSE.md` — 45-minute visual Kubernetes crash course, read this first
+- `docs/CRASH-COURSE.md` — general Kubernetes crash course (generic example, ASCII diagrams), read this first
+- `docs/PROJECT-WALKTHROUGH.md` — how Kubernetes is used in this specific cluster
 - `docs/ONBOARDING.md` — the Kubernetes / AWS / networking reference
 - `docs/DIAGRAMS.md` — cluster internals and whole-system Mermaid diagrams
 - `docs/DECISIONS.md` — what broke and why

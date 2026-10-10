@@ -1,6 +1,6 @@
 # Onboarding: the Kubernetes, AWS and networking you need to read SPEC.md
 
-Read `CRASH-COURSE.md` first (45 min, diagrams), then this as the reference, then `DIAGRAMS.md`, `SPEC.md`, `DECISIONS.md`. Every concept below is tied to a concrete object in this repo so you can `kubectl get` it and see it.
+Read `CRASH-COURSE.md` first (general Kubernetes), then `PROJECT-WALKTHROUGH.md`, then this as the reference, then `DIAGRAMS.md`, `SPEC.md`, `DECISIONS.md`. Every concept below is tied to a concrete object in this repo so you can `kubectl get` it and see it.
 
 Mental model in one line: **Kubernetes is a scheduler plus a database of desired state.** You write YAML saying "I want 4 copies of this container with these limits"; controllers inside the cluster loop forever making reality match. Everything else is vocabulary for the shapes that YAML can take.
 
