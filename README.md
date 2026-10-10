@@ -1,15 +1,17 @@
 # pr-runtime
 
-Pod-per-PR code review runtime on EKS. Every pull request gets an ephemeral, secret-less pod that clones
-the branch and runs the test suite; a trusted controller admits work from a queue, keeps a warm pool so
-nothing waits on a cold start, asks an LLM to review the diff with the test evidence attached, and posts
-inline review comments back to GitHub. An eval harness with real and synthetic injected bugs measures
-whether the reviewer catches what CI misses.
+Pod-per-PR code review runtime on EKS, delivered as a GitHub App. Every pull request (or `@pr-runtime`
+mention) on an installed repo gets an ephemeral, secret-less pod that clones the branch and runs its test
+suite; a trusted controller admits work from a queue, keeps a warm pool (autoscaled 4..16 by KEDA, nodes by
+Karpenter) so nothing waits on a cold start, asks an LLM to review the diff with the test evidence attached,
+and posts inline review comments and a Check run back as `pr-runtime[bot]`. An eval harness with real and
+synthetic injected bugs measures whether the reviewer catches what CI misses, and what each kind of context
+and scaling actually costs.
 
 ```
-GitHub webhook → API Gateway → Lambda (HMAC) → SQS → controller ─┬─► warm runner pool (pytest, ruff)
-                                                                  ├─► LLM review → GitHub review
-                                                                  └─► Postgres → console (React) / Prometheus → Grafana
+GitHub App events → API Gateway → Lambda (HMAC) → SQS → controller ─┬─► runner pool 4..16 (KEDA) on fixed + Karpenter spot nodes
+                                                                    ├─► LLM review → review + Check run as pr-runtime[bot]
+                                                                    └─► Postgres → console (React) / Prometheus → Grafana
 ```
 
 - `SPEC.md` — design, decisions table, schedule, stretch list

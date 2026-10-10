@@ -279,29 +279,39 @@ flowchart LR
 | Tool | Scales | Signal | Us |
 |---|---|---|---|
 | HPA | pods | CPU/memory | not used |
-| **KEDA** | pods / Jobs | external metric (SQS depth, ...) | cold-start baseline only, disabled |
-| **Karpenter** | **nodes** | Pending pods | burst capacity |
-| our controller | tasks onto pods | its own queue | the actual scheduler of work |
+| **KEDA** | pods / Jobs | external metric (Prometheus query, SQS depth, ...) | **live**: ScaledObject on the runner Deployment, `max(prr_tasks_pending)`, 4..16 replicas |
+| **Karpenter** | **nodes** | Pending pods | burst capacity (spot Graviton) |
+| our controller | tasks onto pods | its own queue | the actual scheduler of work; cap = Ready runners |
 
 ```mermaid
 sequenceDiagram
-  participant U as kubectl scale runner --replicas=16
+  participant Q as 56 PRs arrive
+  participant C as controller
+  participant P as Prometheus
+  participant KD as KEDA / HPA
   participant A as API server
   participant S as scheduler
   participant K as Karpenter
   participant EC2 as EC2
-  U->>A: replicas 4 to 16
+  Q->>C: 52 tasks pending behind 4 runners
+  C->>P: prr_tasks_pending = 52 (scraped every 5s)
+  KD->>P: max(prr_tasks_pending) / threshold 1 → want 16
+  KD->>A: runner replicas 4 to 16 (t+10s)
   A->>S: 12 new pods
   S->>A: 5 fit on the floor, 7 Pending (no room)
   A->>K: watch: 7 Pending pods, 500m each
   K->>EC2: CreateFleet: cheapest arm64 in m7g/c7g/r7g/m8g/c8g that fits, spot preferred
   EC2-->>K: c7g.2xlarge spot, Ready at t+41s
   K->>A: node registered, label pool=burst
-  S->>A: bind the 7 pods to it (t+49s)
-  Note over K: pool back to 4, node empty 60s, drain + terminate
+  S->>A: bind the 7 pods to it (16 Ready at t+78s)
+  Note over C: cap follows Ready runners: 4 → 16 admission slots
+  Note over KD: pending back to 0, 120s stabilization, 16→12→8→4
+  Note over K: node empty 60s, drain + terminate (~t+360s)
 ```
 
-Spot reclaim: AWS posts a 2-minute warning to Karpenter's SQS interruption queue; Karpenter drains early; a busy runner's pod vanishes; our controller notices on the next tick and requeues the task (`prr_tasks_lost_total{reason=pod_lost}`). Measured: attempt 2 posted in 50s, nothing failed.
+Measured on the same 56-PR burst as the fixed pool: the runner stage drained in 86s instead of ~105s, but time-to-comment p50 got *worse* (165s vs 70s) because the serialized GitHub posting became the queue once runners and the LLM stopped metering reviews. Autoscaling the pool only helps when the tasks are long; for 4-second tasks the node ramp (~78s to 16 Ready) costs about what it saves. Details in DECISIONS.
+
+Spot reclaim: AWS posts a 2-minute warning to Karpenter's SQS interruption queue; Karpenter drains early; a busy runner's pod vanishes; our controller notices on the next tick and requeues the task (`prr_tasks_lost_total{reason=pod_lost}`). Measured: attempt 2 posted in 50s, nothing failed. Scale-down is deliberately slow (120s window, 4 pods/min) so a lull between waves doesn't flap the pool.
 
 Slurm mapping: NodePool = partition/nodeset rules; Karpenter = ResumeProgram/SuspendProgram with the machine type chosen per request; consolidateAfter = SuspendTime; `kubectl drain` = node going DRAIN.
 
@@ -336,29 +346,32 @@ PromQL you will see: `max(prr_tasks_pending)` (gauge, collapsed across restarts)
 
 ```mermaid
 sequenceDiagram
-  participant GH as GitHub
+  participant GH as GitHub (App installed)
   participant L as API GW + Lambda
   participant Q as SQS
   participant C as controller
   participant R as runner pod
   participant O as OpenAI
   participant PG as Postgres
-  GH->>L: pull_request webhook (HMAC signed)
-  L->>Q: SendMessage (signature verified)
+  GH->>L: pull_request event, or issue_comment with @pr-runtime (HMAC signed)
+  L->>Q: SendMessage (signature verified, drafts and non-mentions dropped)
   C->>Q: ReceiveMessage (long-poll via NAT)
-  C->>PG: insert task (priority = changed lines)
-  C->>R: POST /task to warmest idle pod IP
-  R->>GH: anonymous git fetch (NAT, 443)
-  R->>R: pytest, ruff, read touched files
+  C->>GH: JWT → installation token (1h, scoped to that repo)
+  C->>GH: open Check run "pr-runtime: Reviewing"
+  C->>PG: insert task (priority = changed lines, installation id, trigger)
+  C->>R: POST /task {repo, clone_url, shas} to warmest idle pod IP
+  R->>GH: anonymous git fetch (seed repo warm, other repos partial-clone)
+  R->>R: detect toolchain, install if needed, tests, lint, read touched files
   R->>C: POST /result/{id}, readiness 503
   C->>C: delete pod (ReplicaSet refills)
   C->>O: Responses API, JSON schema, effort high
   C->>PG: findings, verdict, cost
-  C->>GH: POST pulls/N/reviews (serialized)
+  C->>GH: POST review as pr-runtime[bot] (serialized)
+  C->>GH: complete Check run: failure on blockers, neutral on minors, success when clean
   C-->>C: SSE event, console updates
 ```
 
-Timing, quiet: assigned under 1s, runner about 4s, LLM about 15s, post about 2s, total about 24s. Under a 56-PR burst with cap 4: p50 68s, p95 200s; the queue wait and the LLM stage dominate, never the runners.
+Timing, quiet: assigned under 1s, runner about 4s (seed repo) or 20-30s (cold clone of another repo), LLM about 15s, post about 2s, total about 24s. Under a 56-PR burst: fixed pool p50 70s / p95 200s; autoscaled pool p50 165s / p95 242s, worse, because serialized GitHub posting became the bottleneck. The runners are never the limiting stage.
 
 ---
 
@@ -374,6 +387,10 @@ Timing, quiet: assigned under 1s, runner about 4s, LLM about 15s, post about 2s,
 | `port-forward` "hangs" | It is bound to one pod; dies on rollout |
 | One cap for runners and LLM calls | Stages with different resource profiles need separate concurrency |
 | Spot launch failed | Account-level prerequisites (service-linked role, quotas) come before any scheduler logic |
+| Routine `terraform apply` rolled every node | The EKS module tracks the latest AMI by default; pin anything whose change means a rollout |
+| Check-run id overflowed INTEGER, task stranded `queued` | Use BIGINT for external ids; make side bookkeeping non-fatal; reconcile from the DB on boot |
+| 32 review workers starved the DB pool | Every worker holds a connection through its LLM call; size the pool to the workers |
+| Autoscaled pool made p50 worse | Scaling the cheap stage exposes the next bottleneck (serialized posting); measure before celebrating |
 
 ---
 
@@ -389,13 +406,13 @@ Timing, quiet: assigned under 1s, runner about 4s, LLM about 15s, post about 2s,
 8. Why no LoadBalancer Service? Nothing in the cluster is public; the webhook goes to API Gateway, Lambda, SQS, and the controller pulls.
 9. What stops a runner from reading Postgres or EC2 metadata? NetworkPolicy, enforced by the VPC CNI eBPF agent. Verified.
 10. What is the hole in it? Any host on 443.
-11. How does the controller get AWS credentials? Pod Identity association to an IAM role, via the node agent.
+11. How does the controller get AWS credentials? Pod Identity association to an IAM role, via the node agent. GitHub credentials: it signs a JWT with the App's private key and exchanges it for a 1-hour installation token scoped to the installed repos.
 12. How does it get Kubernetes permissions? ServiceAccount plus Role (pods: get/list/watch/delete) in one namespace.
 13. How does kubectl from the driver box authenticate? IAM role, EKS access entry, cluster-admin.
 14. What is a PVC? A claim for storage; the EBS CSI driver turns it into an AZ-bound EBS volume.
 15. What does Karpenter react to? Pending pods. It picks the cheapest instance that fits them and consolidates idle nodes after 60s.
 16. What happens on a spot reclaim mid-task? Interruption queue, drain, pod vanishes, controller requeues immediately.
-17. KEDA vs Karpenter? KEDA scales pods/Jobs from external metrics; Karpenter scales nodes. We kept KEDA only as the cold-start baseline.
+17. KEDA vs Karpenter? KEDA scales pods from external metrics (ours: the controller's backlog gauge via Prometheus, 4..16 runners); Karpenter scales nodes when those pods go Pending. The controller's cap follows the Ready count, so all three layers move together.
 18. What is a CRD? A new object type; its operator is the controller loop that acts on it (NodePool, ScaledJob, ServiceMonitor).
 19. What does Helm do? Templates YAML and records the release. `helm template` shows what it applies.
 20. If the controller dies mid-review? The SQS message was already deleted; the row is in Postgres; `reconcile()` on boot resumes reviewing tasks and requeues running ones. Measured: 17 reviews resumed.

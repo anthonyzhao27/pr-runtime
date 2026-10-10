@@ -155,7 +155,7 @@ Two separate systems, both involved.
 
 **CRD** (Custom Resource Definition) = a new object type added to the API server, usually shipped with an **operator** (a controller that acts on it). You will see:
 - `ServiceMonitor` (Prometheus operator): "scrape this Service's `/metrics` every 5s."
-- `ScaledJob`, `TriggerAuthentication` (KEDA): "spawn Jobs based on SQS queue depth."
+- `ScaledObject` (KEDA): "keep the runner Deployment at ceil(backlog / 1) replicas, between 4 and 16," read from a Prometheus query. (The Oct 7 baseline used a `ScaledJob` instead.)
 - `NodePool`, `EC2NodeClass`, `NodeClaim` (Karpenter): "when pods are unschedulable, launch an EC2 instance matching these constraints; remove it when idle."
 - `PolicyEndpoint` (VPC CNI): the compiled form of our NetworkPolicy.
 
@@ -172,9 +172,10 @@ The **kube-scheduler** places each new pod on a node with enough unreserved *req
 
 **Karpenter** watches Pending pods, computes the cheapest instance type that fits them (within the NodePool's constraints: arm64, listed families and sizes, spot or on-demand), launches it, and labels it so the pods land there. When a node is empty or underutilized for `consolidateAfter: 60s`, it drains and terminates it. It also watches an SQS **interruption queue** fed by EventBridge for spot reclaim notices (2-minute warning) and drains proactively.
 
-Our two layers of "scheduling" are different things and it helps to keep them apart:
+Three layers of "scheduling" are different things and it helps to keep them apart:
 - **Kubernetes** schedules *pods onto nodes* (CPU/memory). Karpenter adds nodes when that fails.
-- **Our controller** schedules *tasks onto runner pods* (admission cap, diff-size ranking, warm pool). It never talks to nodes.
+- **KEDA** decides *how many runner pods* exist, from the controller's backlog gauge (4..16).
+- **Our controller** schedules *tasks onto runner pods* (admission cap = Ready runners, diff-size ranking, warm pool). It never talks to nodes.
 
 `kubectl drain <node>` evicts pods from a node (what a spot interruption or a node upgrade does). Our drain test proved a busy runner's task gets requeued immediately because the controller notices the pod is gone.
 
@@ -191,10 +192,10 @@ Our two layers of "scheduling" are different things and it helps to keep them ap
 
 ## 10. Reading our system with this vocabulary
 
-1. GitHub webhook → API Gateway → Lambda (HMAC) → SQS. Public edge is all AWS-managed; the cluster has no public surface.
+1. GitHub App event (PR or `@pr-runtime` mention) → API Gateway → Lambda (HMAC) → SQS. Public edge is all AWS-managed; the cluster has no public surface.
 2. Controller pod (Deployment, 1 replica, pinned to fixed nodes, Pod Identity for SQS + Secrets Manager, RBAC to list/delete pods) consumes SQS, writes Postgres (StatefulSet, EBS PVC), and keeps an in-memory priority queue.
-3. Runner pods (Deployment, N replicas, no SA token, read-only root, NetworkPolicy) sit Ready. The controller POSTs to a pod IP; the runner clones via NAT, runs tests, POSTs back via the `controller` Service, goes NotReady; the controller deletes it; the ReplicaSet makes a new one.
-4. Burst: pods beyond the floor's capacity go Pending; Karpenter launches a spot Graviton node (~40s); consolidation removes it a minute after the pool shrinks.
+3. Runner pods (Deployment, 4..16 replicas, no SA token, read-only root, NetworkPolicy) sit Ready. The controller POSTs to a pod IP; the runner reuses the warm seed repo or clones any other repo via NAT, runs its tests, POSTs back via the `controller` Service, goes NotReady; the controller deletes it; the ReplicaSet makes a new one. Reviews and Check runs post as `pr-runtime[bot]` with a per-installation token.
+4. Burst: the backlog gauge rises → KEDA raises replicas → pods beyond the floor's capacity go Pending → Karpenter launches a spot Graviton node (~40s) → the controller's cap follows the Ready count; 120s after the backlog clears the pool steps back down and consolidation removes the node.
 5. Everything you look at from a laptop goes through `kubectl port-forward`; everything heavy (image builds, evals) runs on the driver box over SSM.
 
 ---

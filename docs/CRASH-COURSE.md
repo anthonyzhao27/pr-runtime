@@ -125,7 +125,7 @@ Rules to internalize:
 | run a task and finish | Job |
 | a task every night | CronJob |
 
-**In pr-runtime:** the runner pool is a Deployment (warm pool), Postgres is a StatefulSet, the CNI and kube-proxy are DaemonSets, the KEDA baseline used Jobs.
+**In pr-runtime:** the runner pool is a Deployment (warm pool, autoscaled by KEDA), Postgres is a StatefulSet, the CNI and kube-proxy are DaemonSets, the Oct 7 cold-start baseline used Jobs.
 
 ---
 
@@ -328,7 +328,7 @@ Three different layers. Do not confuse them.
 
 Karpenter vs Cluster Autoscaler: Cluster Autoscaler resizes pre-defined node groups; Karpenter looks at the pending pods and launches whichever instance type fits cheapest, and removes idle nodes.
 
-**In pr-runtime:** Karpenter provides burst capacity (spot nodes in ~40s); KEDA was only the cold-start baseline; our own controller schedules *tasks* onto pods, a separate layer on top of all of this.
+**In pr-runtime:** KEDA scales the runner Deployment 4..16 from the controller's backlog gauge; Karpenter adds spot nodes in ~40s when those pods go Pending; our own controller schedules *tasks* onto pods with a cap that follows the Ready count. Measured: it works, and for 4-second tasks it didn't speed up time-to-comment, because the next bottleneck (serialized GitHub posting) took over.
 
 ---
 

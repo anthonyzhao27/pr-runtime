@@ -46,10 +46,10 @@ Each row: what we chose, what we rejected, and the one-sentence Q&A answer.
 ## 2. Architecture (as deployed)
 
 ```
-GitHub (anthonyzhao27/flask fork)
-   │  pull_request webhook (opened / synchronize / reopened)
+GitHub App "pr-runtime" (installed per repo/org; events for every installed repo)
+   │  pull_request (opened / synchronize / reopened / ready_for_review)  ·  issue_comment mentioning @pr-runtime
    ▼
-API Gateway (HTTP API) ──► Lambda: verify HMAC, drop pings ──► SQS pr-runtime-tasks (+ DLQ)
+API Gateway (HTTP API) ──► Lambda: verify HMAC, drop pings/drafts/non-mentions ──► SQS pr-runtime-tasks (+ DLQ)
                                                                    │ long-poll
                                                                    ▼
    Secrets Manager ──(Pod Identity)──►  ┌─────────────────────────────┐
@@ -59,6 +59,7 @@ API Gateway (HTTP API) ──► Lambda: verify HMAC, drop pings ──► SQS p
                                         │  - assign → delete pod      │  REVIEW_WORKERS=32
                                         │  - lost-pod / deadline requeue, reconcile on restart
                                         │  - LLM review (4 configs)   │  git mirror in /tmp for agentic tools
+                                        │  - App JWT → install token  │  review + Check run as pr-runtime[bot]
                                         │  - serialized GitHub posts  │
                                         │  - /metrics  /api  SSE      │◄──► Postgres 16 (StatefulSet, gp3 PVC)
                                         │  - serves console + eval    │
@@ -66,10 +67,13 @@ API Gateway (HTTP API) ──► Lambda: verify HMAC, drop pings ──► SQS p
                                                    │ POST /task {task_id, head, base, pr}
                                                    ▼
                         ┌──────────────────────────────────────────┐
-                        │ runner Deployment, replicas=N (4 idle)   │  no secrets, no SA token, read-only root
-                        │  boot: copy /opt/seed/flask → /work      │  egress: controller, DNS, *:443 (not RFC1918/IMDS)
-                        │  task: fetch, checkout, diff, pytest,    │
-                        │        ruff, POST /result, readiness→503 │
+                        │ runner Deployment, replicas 4..16        │  no secrets, no SA token, read-only root
+                        │  (KEDA ScaledObject → HPA on backlog)    │  egress: controller, DNS, *:443 (not RFC1918/IMDS)
+                        │  boot: stage seed repo → /work           │
+                        │  task: seed repo warm, else clone any    │
+                        │        repo; detect toolchain or read   │
+                        │        .pr-runtime.yml; tests + lint;   │
+                        │        POST /result, readiness→503      │
                         │  controller deletes pod; ReplicaSet refills
                         └──────────────────────────────────────────┘
                  fixed floor: 3× m7g.large ──── Karpenter burst: spot c7g/m7g…, consolidates at 60s idle
@@ -79,12 +83,12 @@ API Gateway (HTTP API) ──► Lambda: verify HMAC, drop pings ──► SQS p
 ```
 
 **Flow for one PR:**
-1. Webhook → Lambda verifies `X-Hub-Signature-256`, forwards accepted `pull_request` events to SQS with `event`/`action`/`delivery` attributes.
-2. Controller consumes SQS, dedupes by `(pr, head_sha, config)`, supersedes older in-flight tasks for the same PR, creates a `tasks` row with priority = changed lines, enqueues.
-3. Scheduler tick (1s): idle = runner pods that are Ready and not assigned; while `busy < M`, pop smallest, POST the task to the warmest idle pod; `cold` flag if the pod is < 10s old.
-4. Runner: `git fetch`, checkout, merge-base diff, full `pytest`, `ruff`, read touched files, POST `/result/<task_id>`, flip readiness to 503.
-5. Controller deletes the pod, persists the result, submits the review to the LLM pool. Config decides the prompt: diff only / + files + test output / + guidelines / + tools.
-6. GitHub review posted (serialized, 1.5s gap, backoff on secondary rate limit): inline comments at `{path, line}` with severity, claim, evidence; verdict.
+1. The GitHub App delivers the event → Lambda verifies the HMAC, keeps PR events and `@pr-runtime` comments, forwards to SQS with `event`/`action`/`delivery` attributes.
+2. Controller consumes SQS, checks the repo allowlist and the repo's `.pr-runtime.yml` `mode:`, dedupes by `(pr, head_sha, config)`, supersedes older in-flight tasks for the same PR, creates a `tasks` row (priority = changed lines, `installation_id`, `trigger`), opens a Check run, enqueues. A mention gets a 👀 reaction.
+3. Scheduler tick (1s): idle = runner pods that are Ready and not assigned; cap M = number of Ready runners (or a fixed override); while `busy < M`, pop smallest, POST `{repo, clone_url, shas}` to the warmest idle pod; `cold` flag if the pod is < 10s old. Backlog raises `prr_tasks_pending` → KEDA scales the Deployment 4..16 → Karpenter adds a node if needed.
+4. Runner: reuse the warm seed repo or partial-clone the task's repo, `git fetch`, checkout, merge-base diff, detect the toolchain (or read `.pr-runtime.yml`), install if needed, run tests and lint, read touched files, POST `/result/<task_id>`, flip readiness to 503.
+5. Controller deletes the pod, persists the result, submits the review to the LLM pool (32 workers). Config decides the prompt: diff only / + files + test output / + guidelines / + tools.
+6. Posted as `pr-runtime[bot]` with a per-installation token (serialized, 1.5s gap, backoff on secondary rate limit): inline comments at `{path, line}` with severity, claim, evidence; verdict; the Check run completes `failure` on blocker/major findings, `neutral` on minors, `success` when clean.
 7. Metrics (`prr_*`): tasks_pending, runners_idle/busy, reviews_in_flight, admission_rejects_total, cold_assignments_total, tasks_lost_total{reason}, phase_seconds{phase}, wait_for_runner_seconds, time_to_comment_seconds, llm_tokens_total, cost_usd_total{kind}.
 
 ---
@@ -92,20 +96,20 @@ API Gateway (HTTP API) ──► Lambda: verify HMAC, drop pings ──► SQS p
 ## 3. Components (as built)
 
 ### 3.1 `infra/` (Terraform)
-- `vpc.tf` 2 AZs, private subnets for nodes, single NAT. `eks.tf` EKS 1.34, Graviton node group 3× m7g.large, addons (vpc-cni with network policy, coredns, kube-proxy, pod-identity-agent, ebs-csi). `queue.tf` SQS + DLQ. `apigw.tf` HTTP API + `lambda/ingress.py` (HMAC). `ecr.tf` controller / runner / tools repos. `identity.tf`, `identity-addons.tf` Pod Identity roles (controller, KEDA, baseline job, EBS CSI). `secrets.tf` `pr-runtime/app` seeded from `.env`. `karpenter.tf` module IAM, interruption queue, discovery tags. `driver.tf` driver instance, access entry, SG rule into the cluster SG.
+- `vpc.tf` 2 AZs, private subnets for nodes, single NAT. `eks.tf` EKS 1.34, Graviton node group 3× m7g.large with a pinned AMI release, addons (vpc-cni with network policy, coredns, kube-proxy, pod-identity-agent, ebs-csi). `queue.tf` SQS + DLQ. `apigw.tf` HTTP API + `lambda/ingress.py` (HMAC for the App's webhook; PR + mention filtering). `ecr.tf` controller / runner / tools repos. `identity.tf`, `identity-addons.tf` Pod Identity roles (controller, KEDA, baseline job, EBS CSI). `secrets.tf` `pr-runtime/app` seeded from `.env`. `karpenter.tf` module IAM, interruption queue, discovery tags. `driver.tf` driver instance, access entry, SG rule into the cluster SG.
 - Helm releases are applied from the CLI (`make rollout`, `deploy/monitoring/kps-values.yaml`, KEDA, Karpenter), not from Terraform.
 - `terraform destroy` plus `helm uninstall` and Karpenter NodeClaim cleanup leaves nothing billable.
 
 ### 3.2 `controller/` (Python 3.12, FastAPI)
 - `bootstrap.py` pull secrets from Secrets Manager before settings load. `config.py` all knobs (cap, review workers, deadline, models, effort, prices, pool size, guidelines dir).
-- `queue.py` SQS consumer, dedupe, supersede. `scheduler.py` ranking, admission, assignment, deadline + lost-pod requeue, result handling, review + post, reconcile on startup. `k8s.py` runner pod listing/deletion.
-- `reviewer.py` prompt assembly per config, structured outputs, `read_file` / agentic tool loop. `repo.py` bare git mirror for `read_file`/`grep`/`list_dir`. `github.py` reviews API with self-review fallback and rate-limit backoff.
+- `queue.py` SQS consumer (PR events and `@pr-runtime` mentions), repo allowlist and per-repo `mode:`, dedupe, supersede, Check run start. `scheduler.py` ranking, admission (cap = Ready runners), assignment, deadline + lost-pod requeue, orphan sweep, result handling, review + post + Check finish, reconcile on startup. `k8s.py` runner pod listing/deletion.
+- `reviewer.py` repo-agnostic prompt per config, structured outputs, `read_file` / agentic tool loop. `repo.py` bare git mirror for `read_file`/`grep`/`list_dir`. `github_app.py` JWT → per-installation tokens (cached). `github.py` reviews, Checks API, reactions, comments; PAT fallback with self-review downgrade; serialized writes with rate-limit backoff.
 - `db.py` SQLAlchemy models `tasks`, `findings`, `feedback`; `create_all` + idempotent `ALTER` migrations. `api.py` `/api/tasks`, `/api/tasks/{id}`, `/api/tasks/{id}/rerun`, `/api/findings/{id}/feedback`, `/api/stats`, `/api/events` (SSE). `main.py` wiring, `/metrics`, `/eval/results/latest/*` from a ConfigMap, SPA catch-all.
 - Image: multi-stage Dockerfile (node builds the console → python stage with git).
 
 ### 3.3 `runner/` (Python 3.12, stdlib HTTP server)
-- Image: `python:3.12-slim` + git + uv; Flask fork cloned to `/opt/seed/flask` with `uv sync --group tests --group dev` baked in. On boot the seed is copied to the `/work` emptyDir (root fs is read-only).
-- `POST /task` → fetch/checkout/diff/pytest/ruff/touched files → `POST /result` → state `done`, `/healthz` returns 503 so it is never reassigned. `RUNNER_MODE=job` + `TASK_FILE` for the KEDA baseline.
+- Image: `python:3.12-slim` + git + uv + ruff; the seed repo (Flask fork) cloned to `/opt/seed/flask` with test deps baked in. On boot the seed is staged into the `/work` emptyDir (root fs is read-only).
+- `POST /task {repo, clone_url, shas}` → seed repo reused warm (install skipped), any other repo partial-cloned → fetch/checkout/diff → toolchain from `.pr-runtime.yml` or detection (uv/pip/npm/go; none → diff-only review) → install, tests, lint, touched files → `POST /result` → state `done`, `/healthz` returns 503 so it is never reassigned. `RUNNER_MODE=job` + `TASK_FILE` for the KEDA baseline.
 
 ### 3.4 `eval/`
 - `build_corpus.py` historical reverts (red keeps tests; green reverts tests in a `bug-base/<sha>` branch so the PR diff is source-only) + 20 clean replays (base = main minus C, head = main). `mutate.py` single-operator AST mutants (cmp/boolop/not/offby1/guard/bool/swap_args/del_stmt), green and red, plus `--noisy` (mutant cherry-picked on top of a clean-base so the diff carries a real upstream change). `mutate_xfile.py` cross-file default flips (negative result on Flask, kept).
