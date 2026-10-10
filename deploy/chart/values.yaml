@@ -16,6 +16,9 @@ controller:
   priceInputPerM: "10.0"     # gpt-6-astra standard tier
   priceOutputPerM: "50.0"
   repo: anthonyzhao27/flask
+  repos: anthonyzhao27/flask      # comma-separated allowlist of repos the App may review
+  mentionHandle: "@pr-runtime"
+  checksEnabled: "true"
   queueUrl: https://sqs.us-east-1.amazonaws.com/511572480852/pr-runtime-tasks
   postReviews: true
   resources:

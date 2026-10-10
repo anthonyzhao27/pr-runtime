@@ -1,7 +1,11 @@
 """Webhook ingress: verify GitHub's HMAC signature, then forward the event to SQS.
 
 Runs at the edge so nothing unauthenticated ever reaches the queue, and the cluster stays private.
+Accepts events from a repo webhook or from the GitHub App (same secret). Forwards:
+  - pull_request: opened / synchronize / reopened / ready_for_review
+  - issue_comment: created, on a PR, mentioning the bot handle   (the "@pr-runtime" trigger)
 """
+import base64
 import hashlib
 import hmac
 import json
@@ -11,7 +15,8 @@ import boto3
 
 QUEUE_URL = os.environ["QUEUE_URL"]
 SECRET = os.environ["WEBHOOK_SECRET"].encode()
-ACCEPT = {"pull_request"}
+MENTION = os.environ.get("MENTION_HANDLE", "@pr-runtime").lower()
+PR_ACTIONS = {"opened", "synchronize", "reopened", "ready_for_review"}
 sqs = boto3.client("sqs")
 
 
@@ -23,7 +28,6 @@ def handler(event, _ctx):
     headers = {k.lower(): v for k, v in (event.get("headers") or {}).items()}
     body = event.get("body") or ""
     if event.get("isBase64Encoded"):
-        import base64
         body = base64.b64decode(body).decode()
 
     sig = headers.get("x-hub-signature-256", "")
@@ -35,22 +39,33 @@ def handler(event, _ctx):
     delivery = headers.get("x-github-delivery", "")
     if gh_event == "ping":
         return _resp(200, "pong")
-    if gh_event not in ACCEPT:
-        return _resp(202, f"ignored event {gh_event}")
-
     try:
-        action = json.loads(body).get("action", "")
+        payload = json.loads(body)
     except json.JSONDecodeError:
         return _resp(400, "body is not json")
-    if action not in ("opened", "synchronize", "reopened"):
-        return _resp(202, f"ignored action {action}")
+    action = payload.get("action", "")
+
+    if gh_event == "pull_request":
+        if action not in PR_ACTIONS:
+            return _resp(202, f"ignored action {action}")
+        if (payload.get("pull_request") or {}).get("draft") and action != "ready_for_review":
+            return _resp(202, "ignored draft")
+    elif gh_event == "issue_comment":
+        if action != "created" or "pull_request" not in (payload.get("issue") or {}):
+            return _resp(202, "ignored comment")
+        if MENTION not in ((payload.get("comment") or {}).get("body") or "").lower():
+            return _resp(202, "no mention")
+        if ((payload.get("comment") or {}).get("user") or {}).get("type") == "Bot":
+            return _resp(202, "ignored bot comment")
+    else:
+        return _resp(202, f"ignored event {gh_event}")
 
     sqs.send_message(
         QueueUrl=QUEUE_URL,
         MessageBody=body,
         MessageAttributes={
             "event": {"DataType": "String", "StringValue": gh_event},
-            "action": {"DataType": "String", "StringValue": action},
+            "action": {"DataType": "String", "StringValue": action or "unknown"},
             "delivery": {"DataType": "String", "StringValue": delivery or "unknown"},
         },
     )

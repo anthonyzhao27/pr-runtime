@@ -59,6 +59,9 @@ class Task(Base):
     cold: Mapped[bool] = mapped_column(Boolean, default=False)  # true when no warm runner was available
     cost_compute_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     cost_tokens_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    installation_id: Mapped[int | None] = mapped_column(Integer, nullable=True)   # GitHub App installation
+    check_run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)      # Checks API run for this task
+    trigger: Mapped[str] = mapped_column(String(16), default="webhook")           # webhook | mention | manual
 
     findings: Mapped[list["Finding"]] = relationship(back_populates="task", cascade="all, delete-orphan")
 
@@ -75,6 +78,7 @@ class Task(Base):
             "tool_calls": self.tool_calls, "error": self.error, "cold": self.cold,
             "touched_files": self.touched_files or [], "findings_count": len(self.findings),
             "cost_compute_usd": self.cost_compute_usd, "cost_tokens_usd": self.cost_tokens_usd,
+            "installation_id": self.installation_id, "check_run_id": self.check_run_id, "trigger": self.trigger,
         }
         if full:
             d.update({
@@ -134,6 +138,9 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
 MIGRATIONS = [
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cost_compute_usd FLOAT",
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cost_tokens_usd FLOAT",
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS installation_id INTEGER",
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS check_run_id INTEGER",
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS trigger VARCHAR(16) DEFAULT 'webhook'",
 ]
 
 

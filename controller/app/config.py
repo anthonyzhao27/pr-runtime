@@ -40,6 +40,10 @@ class Settings:
     runner_cpu_limit: float = float(os.environ.get("RUNNER_CPU_LIMIT", "1"))
     pool_size: int = _int("POOL_SIZE", 4)
     guidelines_dir: str = os.environ.get("GUIDELINES_DIR", "/guidelines")
+    # Multi-repo (S8): events from repos not listed here are ignored (or answered with a "not configured" comment).
+    repos: tuple[str, ...] = tuple(r.strip() for r in os.environ.get("REPOS", "anthonyzhao27/flask").split(",") if r.strip())
+    mention_handle: str = os.environ.get("MENTION_HANDLE", "@pr-runtime")
+    checks_enabled: bool = os.environ.get("CHECKS_ENABLED", "true").lower() == "true"
 
     def compute_usd(self, seconds: float) -> float:
         return seconds * (self.node_usd_per_hour / 3600.0) * (self.runner_cpu_limit / self.node_vcpu)

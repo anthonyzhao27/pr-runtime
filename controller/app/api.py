@@ -44,9 +44,9 @@ def rerun(task_id: str, body: RerunBody, request: Request):
         t = s.get(Task, task_id)
         if not t:
             raise HTTPException(404, "task not found")
-        repo, pr, head, base = t.repo, t.pr_number, t.head_sha, t.base_sha
+        repo, pr, head, base, inst = t.repo, t.pr_number, t.head_sha, t.base_sha, t.installation_id
     new_id = request.app.state.consumer.create_task(repo=repo, pr_number=pr, head_sha=head, base_sha=base,
-                                                     action="manual", config=body.config)
+                                                     action="manual", config=body.config, installation_id=inst)
     return {"id": new_id}
 
 

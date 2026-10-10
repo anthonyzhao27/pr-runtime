@@ -220,6 +220,7 @@ class Scheduler:
                 t.error = str(result["error"])[:2000]
                 s.commit()
                 metrics.tasks_total.labels(state="failed").inc()
+                github.check_finish(t.repo, t.check_run_id, t.installation_id, "neutral", "Runner failed", t.error)
                 events.publish("task.updated", t.to_dict())
                 return
             t.diff = result.get("diff")
@@ -272,7 +273,8 @@ class Scheduler:
                         f"_pr-runtime_ · pytest exit {t.pytest_rc} · ruff exit {t.ruff_rc} · "
                         f"{len(t.findings)} finding(s) · model `{t.reviewer_model}` · config `{t.config}`")
                 try:
-                    t.review_url = github.post_review(t.repo, t.pr_number, t.head_sha, t.verdict, body, comments)
+                    t.review_url = github.post_review(t.repo, t.pr_number, t.head_sha, t.verdict, body, comments,
+                                                      installation_id=t.installation_id)
                     for f in t.findings:
                         f.posted = bool(t.review_url)
                     timings["post"] = round(time.monotonic() - t0, 3)
@@ -289,6 +291,15 @@ class Scheduler:
             s.commit()
             metrics.time_to_comment.observe(total)
             metrics.tasks_total.labels(state="posted").inc()
+            # Checks API: the bot can block (failure) but never approves; merge policy stays with humans/rulesets.
+            if t.check_run_id:
+                blockers = [f for f in t.findings if f.severity in ("blocker", "major")]
+                conclusion = "failure" if blockers else ("neutral" if t.findings else "success")
+                title = (f"{len(blockers)} blocking finding(s)" if blockers else
+                         (f"{len(t.findings)} minor finding(s)" if t.findings else "No findings"))
+                text = "\n".join(f"- `{f.path}:{f.line}` **{f.severity}** {f.claim}" for f in t.findings)
+                github.check_finish(t.repo, t.check_run_id, t.installation_id, conclusion, title,
+                                    f"{t.summary or ''}\n\npytest exit {t.pytest_rc} · ruff exit {t.ruff_rc} · model `{t.reviewer_model}`", text)
             log.info("posted %s pr#%s verdict=%s findings=%d total=%.1fs", task_id, t.pr_number, t.verdict,
                      len(t.findings), total)
             events.publish("task.updated", t.to_dict())

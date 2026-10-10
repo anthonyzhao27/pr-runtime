@@ -88,6 +88,12 @@ spec:
               value: {{ .Values.controller.priceInputPerM | default "10.0" | quote }}
             - name: PRICE_OUTPUT_PER_M
               value: {{ .Values.controller.priceOutputPerM | default "50.0" | quote }}
+            - name: REPOS
+              value: {{ .Values.controller.repos | default "anthonyzhao27/flask" | quote }}
+            - name: MENTION_HANDLE
+              value: {{ .Values.controller.mentionHandle | default "@pr-runtime" | quote }}
+            - name: CHECKS_ENABLED
+              value: {{ .Values.controller.checksEnabled | default "true" | quote }}
             - name: REVIEW_WORKERS
               value: {{ .Values.controller.reviewWorkers | default 12 | quote }}
             - name: REASONING_EFFORT
