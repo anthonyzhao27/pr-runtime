@@ -1,162 +1,142 @@
-# pr-runtime — Spec
+# pr-runtime — Spec (as built)
 
-**One-line:** A pod-per-PR code review runtime on EKS. Every pull request gets its own ephemeral, secret-less pod that clones the branch and runs the test suite; a trusted controller admits work from a queue, keeps a warm pool so nothing waits on a cold start, asks an LLM to review the diff with the test evidence attached, and posts inline review comments back to GitHub. An eval harness with injected real-world bugs measures whether the reviewer catches what CI misses.
+**One-line:** A pod-per-PR code review runtime on EKS. Every pull request gets its own ephemeral, secret-less pod that clones the branch and runs the test suite; a trusted controller admits work from a queue, keeps a warm pool so nothing waits on a cold start, asks an LLM to review the diff with the test evidence attached, and posts inline review comments back to GitHub. An eval harness with real and synthetic injected bugs measures whether the reviewer catches what CI misses, and what each kind of context costs.
 
 **Why this exists (the talk's framing):** Uncountable's engineering post describes Circus: ingress → control plane that ranks and admits → warm pod pool → ephemeral pod per task → egress, with Rover reviewing every PR. The question this project answers for myself: *what does it actually cost to run untrusted PR code per-task on Kubernetes, and what does a warm pool / admission layer buy you under burst?* The reviewer is the workload. The measurements are the deliverable.
 
-**Dates:** Oct 7 build start → **Oct 13 video recorded** → Oct 14 travel → Oct 15 onsite (30 min: ~12 talk, ~18 Q&A).
+**Dates:** Oct 7 build start → core done Oct 7 night → stretch done Oct 8 → **video by Oct 13** → Oct 14 travel → Oct 15 onsite (30 min: ~12 talk, ~18 Q&A).
+
+This file was rewritten on Oct 9 to match what is deployed. The original plan's deviations are called out inline as **(changed)**; the reasons live in `docs/DECISIONS.md`.
 
 ---
 
-## 1. Decisions (locked)
+## 1. Decisions (as built)
 
 Each row: what we chose, what we rejected, and the one-sentence Q&A answer.
 
 | # | Decision | Chosen | Rejected | Q&A line |
 |---|---|---|---|---|
-| 1 | Target repo | Fork of `pallets/flask` | Own toy repo; SQLAlchemy | "Real code I didn't write, ~480 tests in under a minute, and you read Flask daily so you can judge whether a catch is good." |
-| 2 | Ingress | GitHub webhook → API Gateway → SQS | ALB Ingress into cluster; polling | "Nothing in the cluster is public. The queue is both the burst buffer and the admission signal." |
-| 3 | Control plane | Custom Python controller (`kubernetes` client) | Pure KEDA ScaledJob | "KEDA gives pod-per-task in 20 lines but no warm pool and no ranking. I built KEDA first as the cold-start baseline, then the controller." |
-| 4 | Warm pool mechanism | Runner `Deployment` of N idle pods; controller assigns via HTTP to pod IP; runner **exits after one task**; ReplicaSet refills | Long-lived workers reused across tasks; Jobs | "Exit-after-one keeps pods ephemeral per task, and the ReplicaSet is the pool refill logic for free." |
-| 5 | Admission | Cap M concurrent busy runners; rank pending by diff size (small first) | FIFO | "Small PRs first minimizes median time-to-comment under burst; the queue absorbs the rest." |
-| 6 | Trust boundary | **Split.** Runner pod has zero secrets, clones public fork anonymously, runs tests, POSTs results back. Controller holds all secrets, calls LLM, posts review. | Runner does everything | "A malicious `conftest.py` in a PR can exfiltrate anything the pod can see. So the pod sees nothing." |
-| 7 | Pod hardening | `runAsNonRoot`, `readOnlyRootFilesystem` + `/work` emptyDir, `automountServiceAccountToken: false`, drop all caps, CPU/mem limits, controller-enforced deadline, NetworkPolicy egress → github.com + controller only | Default pod spec | "Not a sandbox. gVisor or Firecracker is the real answer; this is the cheapest layer that stops the obvious attack." |
-| 8 | LLM step | Single structured call (JSON schema) with diff + full touched files + pytest/ruff output; one tool `read_file` capped at 5 calls | Full agentic loop | "Single call keeps eval stable. `read_file` buys most of the cross-file catching." |
-| 9 | Output | Inline review comments via GitHub Reviews API + `APPROVE` / `REQUEST_CHANGES` verdict | One summary comment | "file:line precision is the whole point; a blob comment hides whether it actually found the bug." |
-| 10 | Test selection | Full `pytest` every time | Affected-tests only | "Suite is under a minute. Selection logic is a bug farm I didn't need." |
-| 11 | Models | Reviewer: gpt-astra. Judge: gpt-luna. Exact IDs pinned in config and logged per run. | Same model for both | "Judge is a different model so the reviewer isn't grading itself." |
-| 12 | Eval ground truth | 30 reverted historical Flask bug fixes (two variants) + 20 real clean PRs; strict and semantic "caught" definitions; 2-config ablation | Hand-labeled synthetic bugs | "Bugs are ones Flask maintainers actually shipped and fixed. The interesting variant is the one where CI stays green." |
-| 13 | IaC | Terraform (`terraform-aws-modules/eks` + SQS + API GW + IRSA) | eksctl | "One repo describes everything, one `destroy` tears it down. eksctl leaves the non-EKS half orphaned." |
-| 14 | Nodes | Managed node group, on-demand, **Graviton (arm64)** since the laptop is arm64 and images build natively | Spot; Karpenter; x86 | "Recording reliability beat saving thirty cents an hour. Karpenter is the real answer at scale; I can talk about preemption from Slurm." |
-| 15 | Observability | kube-prometheus-stack via Helm; controller `/metrics`; Grafana dashboard JSON committed; Rich live table in logs for dev | CloudWatch custom metrics | "Grafana at 5s refresh is what the burst video shows; CloudWatch refreshes once a minute." |
+| 1 | Target repo | Fork of `pallets/flask` (`anthonyzhao27/flask`) | Own toy repo; SQLAlchemy | "Real code I didn't write, 494 tests in ~1 second, and you read Flask daily so you can judge whether a catch is good." |
+| 2 | Ingress **(changed)** | GitHub webhook → API Gateway → **Lambda (HMAC verify)** → SQS | API GW's direct SQS integration (cannot forward the signature header); ALB into the cluster; polling | "Nothing in the cluster is public and nothing unauthenticated reaches the queue. The queue is the burst buffer." |
+| 3 | Control plane | Custom Python controller (`kubernetes` client) | Pure KEDA ScaledJob (kept as the cold-start baseline in `deploy/baseline`) | "KEDA gives pod-per-task in 20 lines but no warm pool, no ranking, and the pod has to hold AWS creds to pull its own message." |
+| 4 | Warm pool mechanism **(changed)** | Runner `Deployment` of N idle pods; controller assigns via HTTP to pod IP; after one task the runner flips readiness to 503 and the **controller deletes the pod**; ReplicaSet refills | Exit-after-one (a Deployment restarts the container in place with a dirty workdir); reusing pods; Jobs | "Pod deletion is the ephemeral boundary; the ReplicaSet is the refill logic for free." |
+| 5 | Admission **(extended)** | Cap M on concurrent busy runners; rank pending by diff size (small first); separate `REVIEW_WORKERS` (12) for the LLM stage; busy pod disappears → immediate requeue (attempts ≤ 3) | FIFO; one concurrency knob for both stages | "One cap is wrong for a pipeline whose stages have different resource profiles: runners are CPU-bound for 4s, the LLM stage is I/O-bound for 15-60s." |
+| 6 | Trust boundary | **Split.** Runner pod has zero secrets, clones the public fork anonymously, runs tests, POSTs results back. Controller holds all secrets (from Secrets Manager), calls the LLM, posts the review, and serves a read-only git mirror for the agentic tools. | Runner does everything | "A malicious `conftest.py` can exfiltrate anything the pod can see. So the pod sees nothing." |
+| 7 | Pod hardening | `runAsNonRoot`, `readOnlyRootFilesystem` + `/work` emptyDir (seed clone copied in at boot), `automountServiceAccountToken: false`, drop all caps, CPU/mem limits, controller-enforced deadline, NetworkPolicy: ingress only from controller; egress only to controller, DNS, and **any host on 443 except RFC1918 and IMDS** (GitHub's CIDRs are not fixed) | Default pod spec | "Not a sandbox. gVisor or Firecracker is the real answer; this is the cheapest layer that stops the obvious attack. The 443 allow-list is the hole." |
+| 8 | LLM step **(extended)** | Structured call (JSON schema) with `reasoning.effort=high`. Four configs: `diff_only`; `full` (+ touched files + pytest/ruff + `read_file` ≤5); `guided` (full + mined guidelines); `agentic` (full + `read_file`/`grep`/`list_dir` against the mirror, ≤15 calls) | Single config | "Single structured call keeps the eval stable. Everything else is an ablation arm, and none of them beat the diff on this corpus." |
+| 9 | Output **(extended)** | Inline review comments via GitHub Reviews API + `APPROVE` / `REQUEST_CHANGES` verdict; when the reviewer identity authored the PR, GitHub forbids a verdict, so it posts a `COMMENT` with the verdict in the body | One summary comment | "file:line precision is the whole point; a blob comment hides whether it actually found the bug." |
+| 10 | Test selection | Full `pytest` every time | Affected-tests only | "Suite is 1-3 seconds. Selection logic is a bug farm I didn't need." |
+| 11 | Models | Reviewer: `gpt-6-astra`, effort high. Judge: `gpt-6-luna`. IDs pinned in Helm values, logged per task. | Same model for both | "Judge is a different, 100× cheaper model so the reviewer isn't grading itself." |
+| 12 | Eval ground truth **(changed)** | 46 bugs: 8 historical reverted Flask fixes (red + green variants; green variants hide the test removal in a base branch), 22 synthetic single-operator mutants the suite does not catch, 10 red mutants, 11 "noisy" mutants hidden inside a real multi-file upstream diff; 20 real merged upstream changes replayed as clean PRs. Equivalent mutants excluded. Strict (±15 lines) and judge-semantic scoring. | 30 historical only (history yields ~8 usable); hand-labeled bugs | "Historical = bugs maintainers actually shipped. Synthetic = defects nothing tests. The harness was wrong more often than the reviewer." |
+| 13 | IaC **(extended)** | Terraform: VPC, EKS (`terraform-aws-modules/eks` v21), node group, SQS+DLQ, API GW + Lambda, ECR ×3, **Pod Identity** roles, EBS CSI addon, Secrets Manager, Karpenter IAM/queue, driver instance. Helm releases applied by CLI/Makefile, not Terraform. | eksctl; IRSA | "One repo describes everything, one `destroy` tears it down. Pod Identity instead of IRSA: one association per service account, no OIDC juggling." |
+| 14 | Nodes **(changed)** | Fixed floor: 3× `m7g.large` on-demand Graviton. Burst: **Karpenter** NodePool (m7g/c7g/r7g/m8g/c8g, large–2xlarge, spot preferred, on-demand fallback, consolidate after 60s). Controller and Postgres pinned to the floor. | Fixed group only; x86 | "The floor is for recording reliability; Karpenter is what you'd run at scale. 4→16 runners in 49s; a drained spot node mid-task costs one requeue." |
+| 15 | Observability **(changed)** | kube-prometheus-stack via Helm (5s scrape, anonymous viewer); controller `/metrics`; Grafana dashboard JSON loaded by ConfigMap. No Rich table (never needed). | CloudWatch custom metrics | "Grafana at 5s refresh is what the burst video shows; CloudWatch refreshes once a minute." |
 | 16 | Demo | Pre-recorded video, cluster may be down on Oct 15 | Live demo | "Travelling the night before. Zero live risk." |
-| 17 | Secrets | k8s Secret from gitignored `.env`, mounted into controller only | Secrets Manager + IRSA | "k8s Secret for a 6-day build; in prod this is Secrets Manager via IRSA so nothing is ever on a laptop. That swap is ~30 minutes." |
-| 18 | Task console (full-stack) | React + Vite + TypeScript SPA served by the controller; FastAPI JSON API + SSE; Postgres (in-cluster via Helm) for tasks/findings/feedback | FastAPI + Jinja + HTMX; custom "observability dashboard" | "Grafana already owns runtime health. The console is the product surface: what did the reviewer find, was it right, re-run it. Thumbs-down on a finding is how engineers teach the reviewer." |
-| 19 | Database | Postgres via Helm chart in-cluster (`bitnami/postgresql`), single replica, PVC | RDS; SQLite in the controller pod | "Their DB, 20 minutes, no extra AWS bill. RDS is the prod answer." |
+| 17 | Secrets **(changed)** | **Secrets Manager** (`pr-runtime/app`) read by the controller at boot via Pod Identity. k8s Secret from `.env` remains only for Postgres's own password. Driver box materializes `.env` from the same secret. | k8s Secret into the controller (the 6-day answer, replaced on day 2) | "Nothing is mounted into the controller; it assumes a role and reads one secret. Caveat: values are seeded from `.env` by Terraform, so they sit in local state." |
+| 18 | Task console (full-stack) | React 18 + Vite + TypeScript SPA built in the controller image and served by FastAPI; JSON API + SSE; Postgres for tasks/findings/feedback; cost column; Eval page reads a published summary | FastAPI + Jinja + HTMX; custom "observability dashboard" | "Grafana owns runtime health. The console is the product surface: what did the reviewer find, was it right, re-run it. Thumbs-down is how engineers teach the reviewer." |
+| 19 | Database **(changed)** | Postgres 16 (`postgres:16-alpine`) as a StatefulSet in our own Helm chart, 8Gi gp3 PVC via EBS CSI | `bitnami/postgresql` (image-tag churn); RDS; SQLite | "Their DB, in-cluster, no extra AWS bill. RDS is the prod answer." |
 | 20 | Framing | Infra-question framing with eval as second act. Name Circus on slide 2. | "I built an AI code reviewer" | "You wrote about X. I wanted to measure Y for myself." |
+| 21 | Driver box **(new)** | `t4g.large` arm64 EC2 in a private subnet, SSM only, cluster-admin via EKS access entry; all image builds and eval runs happen there (`scripts/driver.sh`) | Building and running evals on the laptop (it kernel-panicked from memory pressure on Oct 8) | "The thing that must stay up should not be the thing you close the lid on." |
+| 22 | Cost model **(new)** | Per task: compute = runner seconds × node $/hr × CPU share; tokens at list price; standing pool $/hr | None | "Tokens are 1000× the compute. Four idle runners cost $0.16/hr ≈ 2,000 reviews' worth of tokens per month." |
 
 ---
 
-## 2. Architecture
+## 2. Architecture (as deployed)
 
 ```
 GitHub (anthonyzhao27/flask fork)
-   │  pull_request webhook (opened / synchronize)
+   │  pull_request webhook (opened / synchronize / reopened)
    ▼
-API Gateway (HTTP API) ──► SQS  pr-runtime-tasks  (+ DLQ)
-                              │
-                              │ long-poll
-                              ▼
-                     ┌─────────────────────┐
-                     │  controller (pod)   │  trusted: k8s Secret (env)
-                     │  - validate HMAC    │  (github-bot PAT, openai key, webhook secret)
-                     │  - rank + admit     │
-                     │  - assign to runner │
-                     │  - LLM review       │
-                     │  - post GH review   │
-                     │  - /metrics         │
-                     │  - /api + SSE       │◄──► Postgres (Helm, in-cluster)
-                     │  - serves console   │     tasks, findings, feedback
-                     └──────┬──────────────┘
-                            │                 Console (React/Vite/TS):
-                            │                 task list, task detail, finding feedback, re-run
-                            │ POST /task  {repo, sha, base, pr}
-                            ▼
-                ┌──────────────────────────────┐
-                │ runner Deployment, replicas=N│  untrusted: no secrets, no SA token
-                │  warm: Flask pre-cloned,     │  NetworkPolicy: egress github.com + controller
-                │        deps pre-installed    │
-                │  on task: fetch sha, diff,   │
-                │           pytest, ruff,      │
-                │           POST results back, │
-                │           exit(0)            │
-                │  ReplicaSet refills ──►      │
-                └──────────────────────────────┘
-                            │
-                            ▼
-                Prometheus ◄── scrape ──► Grafana
+API Gateway (HTTP API) ──► Lambda: verify HMAC, drop pings ──► SQS pr-runtime-tasks (+ DLQ)
+                                                                   │ long-poll
+                                                                   ▼
+   Secrets Manager ──(Pod Identity)──►  ┌─────────────────────────────┐
+   pr-runtime/app                       │  controller (FastAPI, 1 pod) │  pinned to fixed nodes
+                                        │  - SQS consume, dedupe      │
+                                        │  - rank (diff size), admit  │  cap M=4 runners
+                                        │  - assign → delete pod      │  REVIEW_WORKERS=12
+                                        │  - lost-pod / deadline requeue, reconcile on restart
+                                        │  - LLM review (4 configs)   │  git mirror in /tmp for agentic tools
+                                        │  - serialized GitHub posts  │
+                                        │  - /metrics  /api  SSE      │◄──► Postgres 16 (StatefulSet, gp3 PVC)
+                                        │  - serves console + eval    │
+                                        └──────────┬──────────────────┘
+                                                   │ POST /task {task_id, head, base, pr}
+                                                   ▼
+                        ┌──────────────────────────────────────────┐
+                        │ runner Deployment, replicas=N (4 idle)   │  no secrets, no SA token, read-only root
+                        │  boot: copy /opt/seed/flask → /work      │  egress: controller, DNS, *:443 (not RFC1918/IMDS)
+                        │  task: fetch, checkout, diff, pytest,    │
+                        │        ruff, POST /result, readiness→503 │
+                        │  controller deletes pod; ReplicaSet refills
+                        └──────────────────────────────────────────┘
+                 fixed floor: 3× m7g.large ──── Karpenter burst: spot c7g/m7g…, consolidates at 60s idle
+
+   Prometheus (5s) ◄── scrape ──► Grafana (anonymous viewer, dashboard "pr-runtime")
+   driver box (t4g.large, SSM) ── builds images → ECR, runs evals, helm rollout
 ```
 
 **Flow for one PR:**
-1. Webhook → API GW → SQS message `{pr_number, head_sha, base_sha, action}`.
-2. Controller polls SQS, verifies HMAC (signature forwarded as message attribute), fetches diff stats via GitHub API, enqueues in internal priority queue keyed by diff size.
-3. Admission loop: while `busy < M` and pending non-empty, pop smallest, pick an idle runner (label `state=idle`), POST task to its pod IP, mark busy, start deadline timer.
-4. Runner: `git fetch origin <sha>`, `git checkout`, `git diff base..head`, `pytest -q -x --tb=short`, `ruff check`, POST `{diff, test_output, lint_output, touched_files_content, timings}` to controller `/result/<task_id>`, exit 0.
-5. Controller: build prompt (diff + touched files + test/lint output), call reviewer with JSON schema, allow up to 5 `read_file` tool calls served from the runner's result payload (full touched files) or a fresh anonymous fetch via GitHub contents API.
-6. Controller posts a GitHub Review: inline comments at `{path, line}` with `severity`, `claim`, `evidence`; verdict `APPROVE` or `REQUEST_CHANGES`.
-7. Metrics: `tasks_pending`, `runners_idle`, `runners_busy`, `admission_rejects_total`, `task_duration_seconds{phase=clone|test|llm|post}`, `time_to_comment_seconds`, `cold_start_seconds` vs `warm_start_seconds`.
+1. Webhook → Lambda verifies `X-Hub-Signature-256`, forwards accepted `pull_request` events to SQS with `event`/`action`/`delivery` attributes.
+2. Controller consumes SQS, dedupes by `(pr, head_sha, config)`, supersedes older in-flight tasks for the same PR, creates a `tasks` row with priority = changed lines, enqueues.
+3. Scheduler tick (1s): idle = runner pods that are Ready and not assigned; while `busy < M`, pop smallest, POST the task to the warmest idle pod; `cold` flag if the pod is < 10s old.
+4. Runner: `git fetch`, checkout, merge-base diff, full `pytest`, `ruff`, read touched files, POST `/result/<task_id>`, flip readiness to 503.
+5. Controller deletes the pod, persists the result, submits the review to the LLM pool. Config decides the prompt: diff only / + files + test output / + guidelines / + tools.
+6. GitHub review posted (serialized, 1.5s gap, backoff on secondary rate limit): inline comments at `{path, line}` with severity, claim, evidence; verdict.
+7. Metrics (`prr_*`): tasks_pending, runners_idle/busy, reviews_in_flight, admission_rejects_total, cold_assignments_total, tasks_lost_total{reason}, phase_seconds{phase}, wait_for_runner_seconds, time_to_comment_seconds, llm_tokens_total, cost_usd_total{kind}.
 
 ---
 
-## 3. Components
+## 3. Components (as built)
 
 ### 3.1 `infra/` (Terraform)
-- VPC (2 AZs, private subnets for nodes, NAT), EKS cluster (1.31+), managed node group: 3× `m7g.large` on-demand.
-- SQS queue + DLQ. API Gateway HTTP API with SQS integration (`SendMessage`), forwards `X-Hub-Signature-256` as a message attribute.
-- IRSA roles: `controller` (sqs:ReceiveMessage/DeleteMessage), `runner` (none; no SA token mounted).
-- EKS addon: VPC CNI with network policy enabled. Helm releases via Terraform `helm_release`: kube-prometheus-stack, KEDA (baseline only).
-- `terraform destroy` must leave nothing billable.
+- `vpc.tf` 2 AZs, private subnets for nodes, single NAT. `eks.tf` EKS 1.34, Graviton node group 3× m7g.large, addons (vpc-cni with network policy, coredns, kube-proxy, pod-identity-agent, ebs-csi). `queue.tf` SQS + DLQ. `apigw.tf` HTTP API + `lambda/ingress.py` (HMAC). `ecr.tf` controller / runner / tools repos. `identity.tf`, `identity-addons.tf` Pod Identity roles (controller, KEDA, baseline job, EBS CSI). `secrets.tf` `pr-runtime/app` seeded from `.env`. `karpenter.tf` module IAM, interruption queue, discovery tags. `driver.tf` driver instance, access entry, SG rule into the cluster SG.
+- Helm releases are applied from the CLI (`make rollout`, `deploy/monitoring/kps-values.yaml`, KEDA, Karpenter), not from Terraform.
+- `terraform destroy` plus `helm uninstall` and Karpenter NodeClaim cleanup leaves nothing billable.
 
-### 3.2 `controller/` (Python 3.12, FastAPI + asyncio)
-- `ingress.py` SQS long-poll, HMAC verify, dedupe by `(pr, sha)`.
-- `scheduler.py` priority queue (diff size), admission cap `M`, idle-runner selection via pod label watch, deadline enforcement (kill pod via API on timeout).
-- `reviewer.py` prompt assembly, OpenAI structured outputs, `read_file` tool loop (cap 5), config-pinned model IDs.
-- `github.py` Reviews API, review comment posting, verdict.
-- `metrics.py` Prometheus client; Rich live table when `DEV=1`.
-- `db.py` SQLAlchemy models: `tasks`, `findings`, `feedback`, `runs` (eval config per task). Alembic not needed; `create_all` on boot.
-- `api.py` JSON endpoints: `GET /api/tasks`, `GET /api/tasks/{id}`, `POST /api/tasks/{id}/rerun?config=`, `POST /api/findings/{id}/feedback`, `GET /api/events` (SSE). Serves built console from `/static`.
-- Config: `M`, pool size `N`, deadline seconds, model IDs, repo slug.
+### 3.2 `controller/` (Python 3.12, FastAPI)
+- `bootstrap.py` pull secrets from Secrets Manager before settings load. `config.py` all knobs (cap, review workers, deadline, models, effort, prices, pool size, guidelines dir).
+- `queue.py` SQS consumer, dedupe, supersede. `scheduler.py` ranking, admission, assignment, deadline + lost-pod requeue, result handling, review + post, reconcile on startup. `k8s.py` runner pod listing/deletion.
+- `reviewer.py` prompt assembly per config, structured outputs, `read_file` / agentic tool loop. `repo.py` bare git mirror for `read_file`/`grep`/`list_dir`. `github.py` reviews API with self-review fallback and rate-limit backoff.
+- `db.py` SQLAlchemy models `tasks`, `findings`, `feedback`; `create_all` + idempotent `ALTER` migrations. `api.py` `/api/tasks`, `/api/tasks/{id}`, `/api/tasks/{id}/rerun`, `/api/findings/{id}/feedback`, `/api/stats`, `/api/events` (SSE). `main.py` wiring, `/metrics`, `/eval/results/latest/*` from a ConfigMap, SPA catch-all.
+- Image: multi-stage Dockerfile (node builds the console → python stage with git).
 
-### 3.3 `runner/` (Python 3.12, tiny HTTP server)
-- Image: `python:3.12-slim` arm64 + git + Flask fork cloned at `/work/flask` + `pip install -e .[dev]` baked in. Pre-warmed `.pytest_cache`.
-- `POST /task`: fetch, checkout, diff, pytest, ruff, read touched files, POST result to controller, `os._exit(0)`.
-- `GET /healthz`. Labels itself `state=idle` on boot via downward API + controller patch (runner has no k8s API access; controller patches labels based on `/healthz` readiness).
-- Pod spec: see Decision 7.
+### 3.3 `runner/` (Python 3.12, stdlib HTTP server)
+- Image: `python:3.12-slim` + git + uv; Flask fork cloned to `/opt/seed/flask` with `uv sync --group tests --group dev` baked in. On boot the seed is copied to the `/work` emptyDir (root fs is read-only).
+- `POST /task` → fetch/checkout/diff/pytest/ruff/touched files → `POST /result` → state `done`, `/healthz` returns 503 so it is never reassigned. `RUNNER_MODE=job` + `TASK_FILE` for the KEDA baseline.
 
 ### 3.4 `eval/`
-- `build_corpus.py`: scan upstream Flask `git log --grep=fix -i` for commits touching ≤3 non-test files that also add/modify a test. For each, create two branches on the fork:
-  - `bug/<sha>-redtest`: revert src hunk, keep new test → CI red.
-  - `bug/<sha>-greentest`: revert src hunk, drop the test → CI green. **This is the variant that matters.**
-  - Record ground truth `{file, hunk_lines, upstream_fix_sha, description}`.
-- `clean_prs.py`: replay 20 real merged upstream PRs as branches → negatives.
-- `run_eval.py`: open PRs on the fork in batches (this is also the burst), collect reviews, score.
-- `score.py`:
-  - **strict caught**: a finding in same file and within ±15 lines of the reverted hunk.
-  - **semantic caught**: judge model says finding describes the same defect (yes/no, with the upstream commit message as reference).
-  - **false positives**: `REQUEST_CHANGES` rate and findings-per-PR on clean PRs; hand-label ~40 findings for precision estimate.
-  - **Ablation configs**: `diff_only` vs `diff+tests+files`. One bar chart.
-- Output: `eval/results/<run_id>/{raw.jsonl, summary.md, chart.png}`.
+- `build_corpus.py` historical reverts (red keeps tests; green reverts tests in a `bug-base/<sha>` branch so the PR diff is source-only) + 20 clean replays (base = main minus C, head = main). `mutate.py` single-operator AST mutants (cmp/boolop/not/offby1/guard/bool/swap_args/del_stmt), green and red, plus `--noisy` (mutant cherry-picked on top of a clean-base so the diff carries a real upstream change). `mutate_xfile.py` cross-file default flips (negative result on Flask, kept).
+- `mine_reviews.py` + `distill_guidelines.py` → `eval/guidelines/*.md` (44 rules with PR links) for the `guided` config.
+- `run_eval.py` opens PRs (burst), waits for the default config, fires other configs as bursts; `--reuse-prs`, `--accept-existing`, `--only`, `--limit`. `score.py` strict/semantic/FP, per-variant and historical-vs-synthetic breakdown, equivalent-mutant exclusion, cost columns, `--judge`. `combine.py` merges runs into `results/combined/` for the console.
+- Outputs per run: `raw.json` (gitignored), `rows.json`, `summary.json`, `summary.md` (committed).
 
-### 3.5 `console/` (React 18 + Vite + TypeScript)
-- Pages: **Tasks** (live table: PR, state, phase timings, verdict, config), **Task detail** (diff viewer, pytest/ruff output, findings list with file:line → GitHub links, thumbs up/down + note per finding, re-run with config picker), **Eval** (results table + ablation chart from `eval/results`).
-- Data: `fetch` against `/api/*`, `EventSource` on `/api/events` for live state. No state library; React Query if it saves time.
-- Styling: Tailwind. No component library.
-- Build: `vite build` → `controller/static/`, baked into the controller image. One image, one Deployment, no separate frontend service.
+### 3.5 `console/` (React 18 + Vite + TypeScript + Tailwind)
+- Tasks (live table via SSE, state/PR filters, phase bar with queue-wait segment, cold/warm dot, cost column, stats strip with pool $/hr), Task detail (findings with feedback, diff viewer, pytest/ruff, re-run with config select), Eval (summary table + recall bars from the published ConfigMap).
 
-### 3.6 `deploy/postgres`
-- `bitnami/postgresql` Helm release, single replica, 8Gi PVC (gp3 via EBS CSI addon), password from the same k8s Secret. `DATABASE_URL` injected into the controller.
+### 3.6 `deploy/`
+- `chart/` our Helm chart: controller (SA + RBAC + Service + Deployment + ServiceMonitor), runner pool, NetworkPolicy, Postgres StatefulSet; values pin models, cap, pool size, prices, secrets id. `baseline/` KEDA ScaledJob (cold-start baseline, disabled). `karpenter/` EC2NodeClass + NodePool. `monitoring/` kube-prometheus-stack values.
 
-### 3.7 `dashboards/`
-- Grafana JSON: queue depth, idle/busy runners, admission rejects, time-to-comment p50/p95, cold vs warm start histogram.
+### 3.7 `dashboards/` Grafana JSON: pending / busy / idle / in-review stats, queue+pool+admission, rejects and cold assigns, time-to-comment p50/p95, wait-for-runner, phase p50, throughput and spend, runner pod counts.
 
-### 3.8 `docs/`
-- `DECISIONS.md` — living log, appended as things break. This is the Q&A study guide.
-- `TALK.md` — slide outline + demo script + hard-questions list.
+### 3.8 `docs/` `DECISIONS.md` (the Q&A study guide, ~30 entries), `TALK.md` (outline, demo script, hard questions, numbers).
+
+### 3.9 Driver box + `scripts/`
+- `scripts/driver.sh '<cmd>'` runs on the driver via SSM (base64 transport; `--bg`/`--get`). `driver_env.sh` materializes `.env` from Secrets Manager and logs `gh` in. `Makefile`: `build-controller`, `build-runner`, `push`, `rollout`, `eval-env`.
+- `create_webhook.sh`, `sync_secret.sh` (Postgres password), `open_prs.py N` (burst), `publish_eval.sh`, `publish_guidelines.sh`, `smoke_rerun.sh`.
 
 ---
 
-## 4. Burst / demo scenario (what the video shows)
+## 4. Demo scenario (what the video shows)
 
 1. Terminal A: `kubectl get pods -n pr-runtime -w`. Four idle runners visible.
-2. Terminal B: `eval/open_pr.py --branch bug/<sha>-greentest`. One PR opens.
-3. Terminal A: one runner flips busy; a fresh pod schedules to refill.
-4. Terminal B tails controller logs: assigned → clone 2s → pytest 38s (green) → LLM 9s → review posted.
-5. Browser: PR shows inline comment on the exact line with the reverted hunk, `REQUEST_CHANGES`. Switch tab to the console: same task, phase timings, finding with thumbs up/down. Click thumbs-up.
-6. Terminal B: `eval/run_eval.py --config full --batch 20`. Twenty PRs open in 5 seconds.
-7. Console task list fills live via SSE. Grafana: `tasks_pending` spikes to 20, `runners_busy` pins at M=4, pool refills in waves, p95 time-to-comment visible. Cold-start baseline (KEDA, recorded earlier) shown side by side.
-8. Cut to results slide.
+2. Terminal B: push a green-test bug branch, `gh pr create`. Tail controller logs: queued → assigned (warm, <1s) → result (~4s) → LLM (~15s) → posted.
+3. Browser: PR shows the inline comment at the reverted hunk. Switch to the console task detail: phase bar, finding, thumbs-up.
+4. Terminal B: `scripts/open_prs.py 20`. Twenty PRs open in ~5 seconds.
+5. Console task list fills live. Grafana: pending spikes, busy pins at cap 4, idle refills in waves, in-review climbs, p95 line. Optional: scale the pool to 16 and show Karpenter bring a spot node in ~40s.
+6. Cut to numbers slide (cold 35s vs warm 24s quiet vs 68s p50 under a 56-PR burst; four-config eval table; cost per PR).
 
-Target length: under 4 minutes. Record 3+ takes. Keep raw screen recordings.
+Target under 4 minutes. Record 3+ takes; keep raw screen recordings.
 
 ---
 
@@ -166,117 +146,98 @@ Target length: under 4 minutes. Record 3+ takes. Keep raw screen recordings.
 2. **Context** (1 min): Uncountable's post, Circus shape. "I wanted to measure it myself."
 3. **Architecture** (2 min): the diagram above. Trust split called out. Console = product surface, Grafana = runtime health.
 4. **Demo video** (4 min).
-5. **Numbers** (2 min): cold vs warm p50/p95; time-to-comment under burst with M=2/4/8; cost per PR split into compute vs tokens.
-6. **Eval** (1.5 min): recall on red-test vs green-test bugs; FP rate on clean PRs; ablation chart.
-7. **What surprised me / what I'd change** (0.5 min): filled from `DECISIONS.md`.
+5. **Numbers** (2 min): cold vs warm; time-to-comment under burst; where time goes per stage; cost per PR compute vs tokens.
+6. **Eval** (1.5 min): four configs, historical vs synthetic, FP on real merged PRs; "context beyond the diff did not measurably help here."
+7. **What surprised me / what I'd change** (0.5 min): from `DECISIONS.md`.
 
-**Hard questions to prepare** (expand in `TALK.md` as they come up):
-- Why not gVisor / Firecracker / Kata? What does your NetworkPolicy *not* stop?
-- How does the controller know a runner is idle? What if the controller dies mid-task?
-- What happens on `synchronize` (new push to same PR) while a review is in flight?
-- Why exit-after-one instead of reusing pods? What does it cost?
-- Why diff-size ranking? Starvation of big PRs?
-- Why SQS over NATS? (Circus uses NATS.)
-- Why on-demand not spot? How would you handle a spot interruption mid-test?
-- How did you pick ±15 lines? Judge agreement with your hand labels?
-- What's the LLM's false positive rate on clean PRs and would you merge on APPROVE?
-- What's the per-PR cost? Where's the money going?
-- Why Python for the controller when Circus is TypeScript?
-- Why serve the SPA from the controller instead of a separate frontend deployment / CDN?
-- What happens to feedback rows? How would they change the reviewer? (→ stretch S1.)
-- Why Postgres in-cluster, and what breaks if the node dies? (PVC on EBS, single AZ.)
-- What would you need to make this multi-repo?
+Hard questions and prepared answers: `docs/TALK.md`.
 
 ---
 
-## 6. Schedule (Oct 7 → Oct 13)
+## 6. Schedule — actual
 
-Stretch items are *not* on this schedule. The console took the buffer day; any slip now eats into video day.
-
-| Date | Deliverable | Done when |
-|---|---|---|
-| **Oct 7 (Tue)** | Spec, repo skeleton, Terraform written. Quota increase (granted: 64). | `terraform plan` clean. Apply on go-ahead. |
-| **Oct 8 (Wed)** | Cluster up. Runner image built + pushed (ECR). KEDA ScaledJob baseline: webhook → SQS → Job → pytest output in logs. Cold-start numbers. Postgres + Prometheus/Grafana Helm installs. | Open PR on fork → Job runs → logs show test output. `psql` connects. |
-| **Oct 9 (Thu)** | Controller: SQS poll, warm pool, assign, exit-after-one refill, admission cap, Rich table, Postgres task rows, `/api/tasks` + SSE. No LLM yet. | 10 PRs in a burst → all run, cap respected, pool refills, rows in DB. |
-| **Oct 10 (Fri)** | Reviewer: structured LLM call + `read_file`, inline GitHub review as bot. Findings persisted. Trust split + pod hardening + NetworkPolicy. | PR gets inline comments from bot. Runner has no secrets. |
-| **Oct 11 (Sat)** | **Console**: Tasks, Task detail, feedback, re-run. Built into controller image. Eval corpus (30 bugs × 2 + 20 clean) + judge scaffolding. | Console shows live tasks; thumbs-down writes a row. Corpus branches exist on fork. |
-| **Oct 12 (Sun)** | Run eval, both configs (also the burst). Grafana dashboard. Record video (3+ takes). Slides draft. | `summary.md` + chart. Video file exists. |
-| **Oct 13 (Mon)** | Anthony runs the demo end-to-end himself. 30-min mock Q&A. `TALK.md` hard questions. Slides final. Optional `terraform destroy`. | Anthony answers every hard question without notes. |
-
-## 7. Known constraints and gotchas
-
-- **EC2 on-demand vCPU quota is 5 in us-east-1.** Requested 32 on Oct 7, **granted 64** same day. Resolved. Spot quota still 5.
-- **AWS profile `personal` uses root credentials.** Works, but should be an IAM user with admin + MFA. Not blocking; flagged.
-- **Laptop is arm64.** Nodes are Graviton (arm64) so images build natively. If x86 ever needed: `docker buildx --platform linux/amd64`.
-- **Free-token OpenAI org rate limits** unknown. Eval = ~50 PRs × 2 configs × ~20k tokens ≈ 2M tokens at concurrency ≤4. Verify limits Oct 10 before eval day.
-- **GitHub webhook on a fork**: webhooks are per-repo, fine. Bot account must be added as collaborator on the fork to post reviews.
-- **`synchronize` events**: dedupe by `(pr, head_sha)`; a new push cancels the in-flight task for that PR (kill runner pod, mark superseded).
-- **Controller restart**: in-flight tasks are lost. SQS visibility timeout (10 min) means unacked messages reappear. Acceptable; documented.
+| Planned | Actual |
+|---|---|
+| Oct 7: spec, Terraform | Oct 7 evening: spec, Terraform, cluster up, runner image, KEDA baseline, Postgres, Grafana, controller, warm pool, burst test, hardening verified, console, eval plumbing. |
+| Oct 8–11: controller, reviewer, console, corpus | Oct 7 night: keys landed, reviewer live, eval run 1 (56 PRs × 2 configs), noisy variant, judge. |
+| Oct 12: eval, video | Oct 8 overnight: S5, S9, S1, S3 (+ drain test), S2; four-config eval; laptop kernel panic → driver box. |
+| Oct 13: mock Q&A | **Remaining:** video (Oct 12, Anthony records, Claude drives), mock Q&A (Oct 13). |
 
 ---
 
-## 8. Secrets setup (Anthony)
+## 7. Known constraints and gotchas (see DECISIONS.md for the stories)
 
-Put both values in `~/pr-runtime/.env` (gitignored). A script turns it into a k8s Secret mounted only into the controller pod. The runner never sees it.
+- EC2 quotas on a fresh account: on-demand vCPU 5 → 64 granted same day; spot 5 → 96. Spot also needs `AWSServiceRoleForEC2Spot` to exist (created manually).
+- AWS profile `personal` uses root credentials. Works; should be an IAM user + MFA.
+- API Gateway's SQS integration cannot forward headers into message attributes; hence Lambda.
+- A Deployment restarts an exited container in place; hence controller-side pod deletion.
+- GitHub forbids APPROVE/REQUEST_CHANGES from the PR author (single identity → COMMENT fallback) and secondary-rate-limits bursts of review creation (serialized posting).
+- The LLM stage, not the runners, is the bottleneck under burst; separate concurrency knob.
+- PR diffs are from the merge-base; a base branch that merely branched off main adds nothing to the diff.
+- Equivalent mutants exist (3 found); excluded from recall.
+- Elastic nodes: the controller once landed on a spot node and got drained with it; control plane and Postgres are now pinned.
+- Controller restart: `reconcile()` requeues `running` tasks and resumes `reviewing` ones from Postgres.
+- The laptop kernel-panicked under memory pressure from Docker builds + evals; everything heavy now runs on the driver box.
+- Secrets Manager values are seeded from `.env` by Terraform and therefore live in local Terraform state.
 
-```
-OPENAI_API_KEY=sk-...
-GITHUB_BOT_TOKEN=github_pat_...
-```
+---
 
-GitHub bot account:
-1. Create a new GitHub account (e.g. `pr-runtime-bot`). Needs a fresh email.
-2. Settings → Developer settings → Fine-grained PAT. Resource owner: the bot. Repository access: only `anthonyzhao27/flask`. Permissions: Pull requests: Read and write. Contents: Read. Metadata: Read.
-3. From `anthonyzhao27`: add the bot as a collaborator on `anthonyzhao27/flask`; accept from the bot.
+## 8. Secrets (as built)
 
-Webhook secret is generated by `scripts/create_webhook.sh` and written to the same `.env`.
+Source of truth: Secrets Manager `pr-runtime/app` = `{OPENAI_API_KEY, GITHUB_BOT_TOKEN, POSTGRES_PASSWORD, JUDGE_MODEL}`, seeded by Terraform from the local gitignored `.env`.
+- Controller: reads it at boot via Pod Identity (`SECRETS_ID` in Helm values). No k8s Secret mounted.
+- Postgres: password from the k8s Secret `pr-runtime-env` (`scripts/sync_secret.sh` from `.env`).
+- Driver box: `scripts/driver_env.sh` writes `.env` from the secret and logs `gh` in.
+- GitHub identity: Anthony's own `gh` token for now (self-review → COMMENT fallback). A bot account or GitHub App is stretch S4.
+- Webhook secret: generated by `scripts/create_webhook.sh` into `.env`, consumed by the Lambda via Terraform.
 
 ## 9. Repo layout
 
 ```
 pr-runtime/
-  SPEC.md
-  infra/              Terraform
-  controller/         FastAPI controller + API + SSE, serves console, Dockerfile
-  console/            React + Vite + TS SPA (built into controller/static)
-  runner/             runner server, Dockerfile (Flask baked in)
-  eval/               corpus builder, runner, scorer, results/
+  SPEC.md  README.md  Makefile
+  infra/              Terraform (vpc, eks, queue, apigw+lambda/, ecr, identity*, secrets, karpenter, driver)
+  controller/         FastAPI control plane + reviewer + API/SSE; multi-stage Dockerfile builds the console
+  console/            React + Vite + TS SPA
+  runner/             untrusted executor image
+  tools/baseline-fetch  init container for the KEDA baseline
+  eval/               build_corpus, mutate, mutate_xfile, mine_reviews, distill_guidelines, run_eval, score, combine; corpus/, guidelines/, results/
+  deploy/chart        our Helm chart (controller, runner pool, NetworkPolicy, Postgres)
+  deploy/baseline     KEDA ScaledJob cold-start baseline (disabled)
+  deploy/karpenter    EC2NodeClass + NodePool
+  deploy/monitoring   kube-prometheus-stack values
   dashboards/         Grafana JSON
-  deploy/             k8s manifests for controller + runner + NetworkPolicy; Helm values for postgres, kube-prometheus-stack, keda
-  docs/DECISIONS.md   living decision log
-  docs/TALK.md        slides outline, demo script, hard questions
-  scripts/            create_webhook.sh, open_pr.py, burst.py
+  docs/               DECISIONS.md, TALK.md
+  scripts/            driver.sh, driver_env.sh, create_webhook.sh, sync_secret.sh, open_prs.py, publish_eval.sh, publish_guidelines.sh, smoke_rerun.sh
 ```
 
 ---
 
-## 10. Stretch (only after §6 is green; in priority order)
+## 10. Stretch — status as of Oct 8: S1, S2, S3, S5, S9 done; S4, S6, S7, S8 not started
 
-Each item is independently droppable. None are referenced by the core schedule. Status as of Oct 8: S1, S2, S3, S5, S9 done; S4, S6, S7, S8 not started.
+### S1. Mined per-directory guidelines ("compiled, not written") — DONE
+743 upstream review comments → 44 rules across `src/flask/`, `tests/`, `docs/`, each linking its source PRs; loaded per touched directory in the `guided` config. Result: 45/46, identical to `full`, +3.6k tokens/PR. No lift, no noise; this corpus measures defects, guidelines encode conventions.
 
-### S1. Mined per-directory guidelines ("compiled, not written") — DONE 10/8 (44 rules from 743 upstream comments; `guided` config; no recall change on this corpus)
-Pull the last ~300 review comments from upstream `pallets/flask` PRs via the GitHub API. One LLM call per top-level directory: distill into ≤15 checkable rules, each tagged with the source PR URLs. Write `GUIDELINES.md` per directory; reviewer loads the ones for touched dirs. Adds a third ablation bar. Talk line: toy version of "3,744 standards, each traceable to its origin." Fallback: hand-write 10 rules and label the slide honestly.
+### S2. Agentic review loop — DONE
+`agentic` config: `read_file`/`grep`/`list_dir` served from a bare git mirror inside the trusted controller (nothing from a PR is executed), 15-call budget. Result: 45/46 strict, 43/46 semantic, 2× tokens, 2.5× latency. Cross-file corpus attempt (`mutate_xfile.py`) was a negative result: Flask's suite covers its cross-file defaults.
 
-### S2. Agentic review loop — DONE 10/8 (`agentic` config: read_file/grep/list_dir from a git mirror in the trusted controller, budget 15; cross-file corpus attempt was a negative result)
-Replace the single call + `read_file` with a bounded tool loop: `read_file`, `grep`, `list_dir`, `run_tests(path)` executed in the runner (requires keeping the runner alive until the LLM finishes, which changes the trust split: runner would need a controller-issued short-lived token to accept follow-up commands). Cap 15 tool calls / 3 min. Compare recall and latency against the single-call config as a fourth ablation bar. Talk line: when does exploration beat context stuffing.
+### S3. Karpenter — DONE
+Burst NodePool on top of the fixed floor; 4→16 runners in 49s; spot after creating the Spot service-linked role; drain mid-task → lost-pod requeue, 0 failed. Controller and Postgres pinned to the floor after the drain evicted the controller once.
 
-### S3. Karpenter — DONE 10/8 (burst NodePool on top of the fixed floor; 4→16 runners in 49s; spot after creating the Spot service-linked role; lost-pod requeue in the scheduler)
-NodePool with Graviton on-demand + spot, consolidation on. Pool refill then also scales nodes under burst. Needs IRSA for Karpenter, interruption-queue handling, and a spot-interruption test (drain mid-pytest, task requeued). Talk line: preemption handling, same problem as Slurm spot nodes.
+### S4. Dedicated bot identity — not started (~1 hour, needs an account)
+GitHub App or bot account so verdicts post as APPROVE/REQUEST_CHANGES instead of COMMENT; per-installation rate limits.
 
-### S4. Dedicated bot identity polish — ~1 hour
-GitHub App instead of PAT: reviews appear as an app with an avatar; installation token per repo; webhook delivered by the App (drops the per-repo webhook script). Multi-repo becomes one install click.
+### S5. Cost model per PR — DONE
+Compute vs tokens per task, standing pool $/hr, in metrics, console, scorer.
 
-### S5. Cost model per PR — DONE 10/8 (compute vs tokens per task, standing pool $/hr, dashboard + console + scorer)
-Compute (node-seconds × price) + tokens (input/output × price) per PR, exported as a metric and a table in results. Talk line: "where does the money go: tests or tokens?"
+### S6. gVisor runtime class — not started (~half day)
+The real answer to "is this a sandbox"; measure the pytest slowdown.
 
-### S6. gVisor runtime class — ~half day
-EKS with `runsc` RuntimeClass on a dedicated node group (needs custom AMI or bottlerocket with gVisor). Runner pods use it. Measures the pytest slowdown under gVisor. Talk line: the real answer to "is this a sandbox."
+### S7. Live-instance screenshots in the review — not started (~half day)
+Mirror Rover's "screenshots from a live instance of its own branch."
 
-### S7. Live-instance screenshot in review — ~half day
-Runner starts the Flask app from the PR branch and hits a few endpoints, attaches responses/screenshots to the review. Mirrors Rover's "four screenshots from a live instance of its own branch."
+### S8. Multi-repo — not started (~half day)
+Repo slug from the webhook; clone-on-boot image; measures what the warm clone actually buys.
 
-### S8. Multi-repo — ~half day
-Repo slug from webhook payload; runner image per repo or generic image with clone-on-boot (loses warm clone, measure the cost). Shows what the warm pool assumption actually buys.
-
-### S9. Secrets Manager + Pod Identity — DONE 10/8 (controller boots from `pr-runtime/app`; no k8s Secret mounted into it)
-Replace the k8s Secret with `secretsmanager:GetSecretValue` at controller boot via an IRSA role. Nothing secret ever on the laptop or in etcd. Talk line: "this is the prod answer; k8s Secret was the 6-day answer."
+### S9. Secrets Manager + Pod Identity — DONE
+Controller boots from `pr-runtime/app`; no k8s Secret mounted into it.
