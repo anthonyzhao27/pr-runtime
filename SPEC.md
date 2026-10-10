@@ -207,7 +207,7 @@ pr-runtime/
   deploy/karpenter    EC2NodeClass + NodePool
   deploy/monitoring   kube-prometheus-stack values
   dashboards/         Grafana JSON
-  docs/               ONBOARDING.md, DECISIONS.md, TALK.md
+  docs/               ONBOARDING.md, DIAGRAMS.md, DECISIONS.md, TALK.md
   scripts/            driver.sh, driver_env.sh, create_webhook.sh, sync_secret.sh, open_prs.py, publish_eval.sh, publish_guidelines.sh, smoke_rerun.sh
 ```
 
