@@ -53,10 +53,13 @@ def prepare_workdir(repo: str, clone_url: str) -> tuple[str, float, str]:
     """Return (path, seconds, how). Reuse the baked seed when it is the same repo; otherwise partial-clone."""
     t0 = time.monotonic()
     work = os.path.join(WORK_ROOT, repo.replace("/", "__"))
+    marker = os.path.join(work, ".pr-runtime-seed")
     if os.path.isdir(os.path.join(work, ".git")):
-        return work, time.monotonic() - t0, "reused"
+        # Staged at boot from the baked seed (deps already installed) or cloned earlier in this pod.
+        return work, time.monotonic() - t0, "seed" if os.path.exists(marker) else "reused"
     if repo == SEED_REPO and os.path.isdir(SEED):
         shutil.copytree(SEED, work, symlinks=True)
+        open(marker, "w").close()
         return work, time.monotonic() - t0, "seed"
     os.makedirs(WORK_ROOT, exist_ok=True)
     rc, out, _ = sh(["git", "clone", "--quiet", "--filter=blob:none", "--no-checkout", clone_url, work], cwd=WORK_ROOT, timeout=180)
@@ -94,13 +97,13 @@ def detect_toolchain(work: str, cfg: dict) -> dict:
         tc["language"] = "python"
         tc["install"] = tc["install"] or ("uv sync --all-groups --quiet 2>/dev/null || uv sync --quiet || uv pip install --quiet -e .")
         tc["test"] = tc["test"] or "uv run --no-sync pytest -q -p no:cacheprovider --tb=short -rf"
-        tc["lint"] = tc["lint"] or "uvx ruff check --output-format concise ."
+        tc["lint"] = tc["lint"] or "ruff check --output-format concise ."
     elif has("requirements.txt") or has("setup.py"):
         tc["language"] = "python"
         tc["install"] = tc["install"] or ("uv venv --quiet .venv && uv pip install --quiet -r requirements.txt pytest"
                                           if has("requirements.txt") else "uv venv --quiet .venv && uv pip install --quiet -e . pytest")
         tc["test"] = tc["test"] or ".venv/bin/python -m pytest -q -p no:cacheprovider --tb=short -rf"
-        tc["lint"] = tc["lint"] or "uvx ruff check --output-format concise ."
+        tc["lint"] = tc["lint"] or "ruff check --output-format concise ."
     elif has("package.json"):
         tc["language"] = "node"
         tc["install"] = tc["install"] or ("npm ci --no-audit --no-fund --silent" if has("package-lock.json") else "npm install --no-audit --no-fund --silent")
