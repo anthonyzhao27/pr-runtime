@@ -49,6 +49,9 @@ class Settings:
         return not self.repos or repo in self.repos
     mention_handle: str = os.environ.get("MENTION_HANDLE", "@pr-runtime")
     checks_enabled: bool = os.environ.get("CHECKS_ENABLED", "true").lower() == "true"
+    # Test knob: when set, every runner assignment clones this URL instead of the task's repo. Used to make the
+    # runner fail on purpose (fallback-review test) without a private repo in the installation. Never set in the chart.
+    clone_url_override: str = os.environ.get("CLONE_URL_OVERRIDE", "")
 
     def compute_usd(self, seconds: float) -> float:
         return seconds * (self.node_usd_per_hour / 3600.0) * (self.runner_cpu_limit / self.node_vcpu)

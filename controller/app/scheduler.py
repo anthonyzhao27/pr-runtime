@@ -205,7 +205,7 @@ class Scheduler:
             if t is None or t.state not in ("queued",):
                 return
             payload = {"task_id": t.id, "head_sha": t.head_sha, "base_sha": t.base_sha, "pr_number": t.pr_number,
-                       "repo": t.repo, "clone_url": f"https://github.com/{t.repo}.git"}
+                       "repo": t.repo, "clone_url": settings.clone_url_override or f"https://github.com/{t.repo}.git"}
             try:
                 r = httpx.post(f"http://{pod['ip']}:{settings.runner_port}/task", json=payload, timeout=5)
                 r.raise_for_status()
