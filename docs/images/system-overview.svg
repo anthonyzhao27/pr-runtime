@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1700" viewBox="0 0 2400 1700" font-family="Helvetica, Arial, sans-serif">
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#111"/></marker><marker id="ard" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/></marker></defs>
+<rect width="2400" height="1700" fill="#ffffff"/>
+<text x="1200" y="70" text-anchor="middle" font-size="56" font-weight="800" fill="#111">pr-runtime: how a pull request becomes an AI code review</text>
+<text x="1200" y="115" text-anchor="middle" font-size="26" font-weight="400" fill="#444">Read left to right. Numbers are the order things happen. Colors: grey = outside world, orange = AWS-managed, blue = our trusted code, red = untrusted PR code.</text>
+<rect x="20" y="300" width="420" height="820" rx="24" fill="#f3f4f6" stroke="#6b7280" stroke-width="4"/>
+<text x="44" y="342" font-size="30" font-weight="800" fill="#6b7280" letter-spacing="2">INTERNET</text>
+<rect x="470" y="300" width="530" height="820" rx="24" fill="#fff7ed" stroke="#c2410c" stroke-width="4"/>
+<text x="494" y="342" font-size="30" font-weight="800" fill="#c2410c" letter-spacing="2">AWS EDGE</text>
+<text x="735" y="400" text-anchor="middle" font-size="22" font-weight="400" fill="#9a3412">public, fully managed, no servers of ours</text>
+<rect x="1040" y="300" width="1340" height="950" rx="24" fill="#eff6ff" stroke="#1d4ed8" stroke-width="4"/>
+<text x="2356" y="342" text-anchor="end" font-size="30" font-weight="800" fill="#1d4ed8" letter-spacing="2">KUBERNETES CLUSTER (EKS)</text>
+<text x="2356" y="374" text-anchor="end" font-size="22" font-weight="400" fill="#1e40af">private network, no public entry point</text>
+<rect x="60" y="520" width="340" height="220" rx="16" fill="#ffffff" stroke="#374151" stroke-width="3"/>
+<text x="230.0" y="570" text-anchor="middle" font-size="36" font-weight="700" fill="#111">GitHub</text>
+<text x="230.0" y="606" text-anchor="middle" font-size="26" fill="#333">your Flask fork</text>
+<text x="230.0" y="638" text-anchor="middle" font-size="26" fill="#333"></text>
+<text x="230.0" y="670" text-anchor="middle" font-size="26" fill="#333">PR opened or updated</text>
+<text x="150" y="800" text-anchor="start" font-size="22" font-weight="700" fill="#111">7. review comments</text><text x="150" y="828" text-anchor="start" font-size="22" font-weight="700" fill="#111">appear here, inline</text>
+<rect x="1130" y="140" width="520" height="120" rx="16" fill="#ffffff" stroke="#374151" stroke-width="3"/>
+<text x="1390.0" y="186" text-anchor="middle" font-size="32" font-weight="700" fill="#111">OpenAI (the AI)</text>
+<text x="1390.0" y="220" text-anchor="middle" font-size="24" fill="#333">reads the PR, finds bugs</text>
+<rect x="515" y="430" width="440" height="110" rx="16" fill="#ffedd5" stroke="#c2410c" stroke-width="3"/>
+<text x="735.0" y="474" text-anchor="middle" font-size="30" font-weight="700" fill="#111">API Gateway</text>
+<text x="735.0" y="508" text-anchor="middle" font-size="24" fill="#333">public URL GitHub calls</text>
+<rect x="515" y="590" width="440" height="110" rx="16" fill="#ffedd5" stroke="#c2410c" stroke-width="3"/>
+<text x="735.0" y="634" text-anchor="middle" font-size="30" font-weight="700" fill="#111">Lambda</text>
+<text x="735.0" y="668" text-anchor="middle" font-size="24" fill="#333">checks the signature is real</text>
+<rect x="515" y="750" width="440" height="110" rx="16" fill="#ffedd5" stroke="#c2410c" stroke-width="3"/>
+<text x="735.0" y="794" text-anchor="middle" font-size="30" font-weight="700" fill="#111">SQS queue</text>
+<text x="735.0" y="828" text-anchor="middle" font-size="24" fill="#333">a waiting line of jobs</text>
+<rect x="1100" y="420" width="540" height="330" rx="16" fill="#dbeafe" stroke="#1d4ed8" stroke-width="3"/>
+<text x="1370.0" y="466" text-anchor="middle" font-size="32" font-weight="700" fill="#111">CONTROLLER (the brain)</text>
+<text x="1370.0" y="502" text-anchor="middle" font-size="26" fill="#333">pulls a job from the queue</text>
+<text x="1370.0" y="534" text-anchor="middle" font-size="26" fill="#333">picks a free runner</text>
+<text x="1370.0" y="566" text-anchor="middle" font-size="26" fill="#333">asks the AI for a review</text>
+<text x="1370.0" y="598" text-anchor="middle" font-size="26" fill="#333">posts the review</text>
+<text x="1370.0" y="630" text-anchor="middle" font-size="26" fill="#333">saves everything</text>
+<rect x="1740" y="390" width="600" height="430" rx="20" fill="#fee2e2" stroke="#b91c1c" stroke-width="3"/>
+<text x="2040" y="436" text-anchor="middle" font-size="32" font-weight="800" fill="#7f1d1d">RUNNER POOL: 4 warm pods</text>
+<rect x="1770" y="470" width="250" height="80" rx="12" fill="#ffffff" stroke="#b91c1c" stroke-width="3"/>
+<text x="1895.0" y="512" text-anchor="middle" font-size="28" font-weight="700" fill="#111">runner</text>
+<rect x="2060" y="470" width="250" height="80" rx="12" fill="#ffffff" stroke="#b91c1c" stroke-width="3"/>
+<text x="2185.0" y="512" text-anchor="middle" font-size="28" font-weight="700" fill="#111">runner</text>
+<rect x="1770" y="570" width="250" height="80" rx="12" fill="#ffffff" stroke="#b91c1c" stroke-width="3"/>
+<text x="1895.0" y="612" text-anchor="middle" font-size="28" font-weight="700" fill="#111">runner</text>
+<rect x="2060" y="570" width="250" height="80" rx="12" fill="#ffffff" stroke="#b91c1c" stroke-width="3"/>
+<text x="2185.0" y="612" text-anchor="middle" font-size="28" font-weight="700" fill="#111">runner</text>
+<text x="2040" y="700" text-anchor="middle" font-size="24" font-weight="400" fill="#333">each runner handles ONE PR: download it,</text>
+<text x="2040" y="732" text-anchor="middle" font-size="24" font-weight="400" fill="#333">run the tests, report back, then it is thrown away</text>
+<text x="2040" y="775" text-anchor="middle" font-size="24" font-weight="700" fill="#7f1d1d">no secrets. firewalled. cannot touch the database.</text>
+<rect x="1100" y="830" width="320" height="160" rx="16" fill="#ffffff" stroke="#1d4ed8" stroke-width="3"/>
+<text x="1260.0" y="874" text-anchor="middle" font-size="30" font-weight="700" fill="#111">Postgres</text>
+<text x="1260.0" y="908" text-anchor="middle" font-size="24" fill="#333">tasks, findings, costs</text>
+<rect x="1460" y="830" width="380" height="160" rx="16" fill="#ffffff" stroke="#1d4ed8" stroke-width="3"/>
+<text x="1650.0" y="872" text-anchor="middle" font-size="28" font-weight="700" fill="#111">Console + Grafana</text>
+<text x="1650.0" y="904" text-anchor="middle" font-size="22" fill="#333">what you look at</text>
+<text x="1650.0" y="932" text-anchor="middle" font-size="22" fill="#333">(via kubectl port-forward)</text>
+<rect x="1900" y="860" width="440" height="130" rx="16" fill="#ffffff" stroke="#065f46" stroke-width="3"/>
+<text x="2120.0" y="904" text-anchor="middle" font-size="30" font-weight="700" fill="#111">Karpenter</text>
+<text x="2120.0" y="936" text-anchor="middle" font-size="22" fill="#333">adds spot machines when</text>
+<text x="2120.0" y="964" text-anchor="middle" font-size="22" fill="#333">runners are queued up</text>
+<rect x="1100" y="1040" width="1240" height="170" rx="16" fill="#ffffff" stroke="#6b7280" stroke-width="3" stroke-dasharray="10 8"/>
+<text x="1720.0" y="1080" text-anchor="middle" font-size="26" font-weight="700" fill="#111">Kubernetes control plane (AWS-managed, you cannot see these machines)</text>
+<text x="1720.0" y="1114" text-anchor="middle" font-size="24" fill="#333">keeps 4 runners alive, places pods on machines, replaces any that die</text>
+<text x="1720.0" y="1144" text-anchor="middle" font-size="24" fill="#333">NOT in the path of a request. It sets things up beforehand and reacts to change.</text>
+<path d="M400,620 L515,490" fill="none" stroke="#111" stroke-width="5" marker-end="url(#ar)"/>
+<circle cx="452" cy="556" r="28" fill="#111"/><text x="452" y="567" text-anchor="middle" font-size="32" font-weight="800" fill="#fff">1</text>
+<text x="452" y="610" text-anchor="middle" font-size="1" font-weight="600" fill="#111"></text>
+<path d="M735,540 L735,590" fill="none" stroke="#111" stroke-width="5" marker-end="url(#ar)"/>
+<circle cx="790" cy="565" r="28" fill="#111"/><text x="790" y="576" text-anchor="middle" font-size="32" font-weight="800" fill="#fff">2</text>
+<path d="M735,700 L735,750" fill="none" stroke="#111" stroke-width="5" marker-end="url(#ar)"/>
+<circle cx="790" cy="725" r="28" fill="#111"/><text x="790" y="736" text-anchor="middle" font-size="32" font-weight="800" fill="#fff">3</text>
+<path d="M955,805 L1100,520" fill="none" stroke="#111" stroke-width="5" marker-end="url(#ar)"/>
+<circle cx="1030" cy="662" r="28" fill="#111"/><text x="1030" y="673" text-anchor="middle" font-size="32" font-weight="800" fill="#fff">4</text>
+<path d="M1640,560 L1770,500" fill="none" stroke="#111" stroke-width="5" marker-end="url(#ar)" marker-start="url(#ar)"/>
+<circle cx="1705" cy="540" r="28" fill="#111"/><text x="1705" y="551" text-anchor="middle" font-size="32" font-weight="800" fill="#fff">5</text>
+<path d="M1370,420 L1370,260" fill="none" stroke="#111" stroke-width="5" marker-end="url(#ar)"/>
+<circle cx="1420" cy="340" r="28" fill="#111"/><text x="1420" y="351" text-anchor="middle" font-size="32" font-weight="800" fill="#fff">6</text>
+<path d="M1100,700 L1070,700 L1070,1180 L130,1180 L130,740" fill="none" stroke="#111" stroke-width="5" marker-end="url(#ar)"/>
+<circle cx="640" cy="1180" r="28" fill="#111"/><text x="640" y="1191" text-anchor="middle" font-size="32" font-weight="800" fill="#fff">7</text>
+<path d="M1260,750 L1260,830" fill="none" stroke="#111" stroke-width="5" stroke-dasharray="12 9" marker-end="url(#ard)"/>
+<text x="1330" y="800" text-anchor="start" font-size="20" font-weight="400" fill="#555">saves</text>
+<path d="M2100,820 L2100,860" fill="none" stroke="#111" stroke-width="5" stroke-dasharray="12 9" marker-end="url(#ard)"/>
+<text x="2120" y="850" text-anchor="start" font-size="20" font-weight="400" fill="#555">busy? scale up</text>
+<text x="1070" y="1232" text-anchor="middle" font-size="1" font-weight="600" fill="#111"></text>
+<text x="1230" y="1100" text-anchor="middle" font-size="1" font-weight="600" fill="#111"></text>
+
+
+<rect x="20" y="1290" width="2360" height="390" rx="20" fill="#f9fafb" stroke="#d1d5db" stroke-width="3"/>
+<text x="60" y="1342" text-anchor="start" font-size="34" font-weight="800" fill="#111">THE STORY OF ONE PR</text>
+<circle cx="75" cy="1388" r="16" fill="#111"/><text x="75" y="1395" text-anchor="middle" font-size="20" font-weight="800" fill="#fff">1</text>
+<text x="108" y="1396" font-size="25" fill="#222">Someone opens or updates a pull request on GitHub. GitHub sends a notification (a webhook) to a public URL.</text>
+<circle cx="75" cy="1426" r="16" fill="#111"/><text x="75" y="1433" text-anchor="middle" font-size="20" font-weight="800" fill="#fff">2</text>
+<text x="108" y="1434" font-size="25" fill="#222">API Gateway hands it to a small Lambda that checks the notification really came from GitHub. Fake ones are dropped here.</text>
+<circle cx="75" cy="1464" r="16" fill="#111"/><text x="75" y="1471" text-anchor="middle" font-size="20" font-weight="800" fill="#fff">3</text>
+<text x="108" y="1472" font-size="25" fill="#222">Real ones go into a queue (SQS). Nothing from the internet ever touches the cluster directly.</text>
+<circle cx="75" cy="1502" r="16" fill="#111"/><text x="75" y="1509" text-anchor="middle" font-size="20" font-weight="800" fill="#fff">4</text>
+<text x="108" y="1510" font-size="25" fill="#222">The controller, inside the cluster, PULLS the next job off the queue. It reaches out; nothing reaches in.</text>
+<circle cx="75" cy="1540" r="16" fill="#111"/><text x="75" y="1547" text-anchor="middle" font-size="20" font-weight="800" fill="#fff">5</text>
+<text x="108" y="1548" font-size="25" fill="#222">It gives the PR to a free runner. The runner downloads the code, runs the tests and linter, and reports back. Then that runner is deleted and a fresh one takes its place.</text>
+<circle cx="75" cy="1578" r="16" fill="#111"/><text x="75" y="1585" text-anchor="middle" font-size="20" font-weight="800" fill="#fff">6</text>
+<text x="108" y="1586" font-size="25" fill="#222">The controller sends the diff plus the test results to the AI and gets back a list of problems with file and line numbers.</text>
+<circle cx="75" cy="1616" r="16" fill="#111"/><text x="75" y="1623" text-anchor="middle" font-size="20" font-weight="800" fill="#fff">7</text>
+<text x="108" y="1624" font-size="25" fill="#222">The controller posts those as inline review comments on the PR, saves everything in Postgres, and you can watch it all live in the console.</text>
+<text x="60" y="1672" font-size="22" font-weight="700" fill="#374151">Typical time: about 24 seconds when quiet (4s tests, 15s AI). Under a 56-PR burst: median 68 seconds.</text>
+</svg>
