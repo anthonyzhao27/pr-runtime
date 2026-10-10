@@ -112,3 +112,33 @@ One bug found on the way: check-run creation returned 422 because the payload se
 
 ## 2026-10-10 — Check run ids don't fit in INTEGER, and a crash between insert and enqueue
 First Check run on the click fork: created fine (`in_progress`, "Reviewing"), then storing its id failed with `NumericValueOutOfRange: integer out of range`. GitHub check-run ids are ~1.1e11; the column was 32-bit. The exception fired *after* the task row was committed and *before* `enqueue()`, so the task sat `queued` in Postgres with no in-memory entry and nothing would ever run it. Three fixes: `BIGINT` for `check_run_id` and `installation_id` (with an idempotent `ALTER COLUMN` migration), check bookkeeping wrapped so a Checks API problem can never block the review, and `reconcile()` now re-enqueues every DB-`queued` task on boot, which is how the stuck one was recovered: the next rollout logged "1 queued re-enqueued" and it posted a second later. Verified after: a fresh mention produced a completed check, conclusion `failure`, title "1 blocking finding(s)".
+
+## 2026-10-10 — Closing the autoscaling loop: the pool scales, time-to-comment does not improve
+**Wired.** `ADMISSION_CAP=0` (new default) makes the cap follow the pool: each scheduler tick the effective cap is the number of Ready runner pods (`prr_admission_cap`, `prr_runners_ready`; `/api/stats` reports `cap_mode: pool` and prices the standing pool from the live count). A positive value is still a fixed override. A KEDA `ScaledObject` (`deploy/chart/templates/keda-scaledobject.yaml`, `runner.autoscale.*`) reads `max(prr_tasks_pending)` from Prometheus every 5s and drives an HPA on the runner Deployment: one pending task per runner, 4..16 replicas, scale-up unbounded, scale-down 120s window then 4 pods/min. Karpenter adds a spot node when the new pods go Pending. The HPA only sets `.spec.replicas`; the ReplicaSet keeps that many pods alive, so the controller's delete-after-one-task behaviour is unchanged. `REVIEW_WORKERS` default 32.
+
+**Measured.** Same 56 PRs as the Oct 7 burst (`bug/*` and `clean/*` on the fork), re-fired through `POST /api/tasks/{id}/rerun` in 3.4s by `scripts/burst_rerun.py` from the driver box; per-task timings from Postgres for both runs.
+
+| | fixed (Oct 7: cap 4, pool 4, 12 workers) | autoscaled (Oct 10: cap=pool 4..16, 32 workers) |
+|---|---|---|
+| arrivals | 56 PRs opened by `gh` over 37s (webhooks) | 56 reruns in 3.4s |
+| time-to-comment p50 / p95 | 70.1s / 200.3s | 164.8s / 242.2s |
+| wait for runner p50 / p95 | 38.9s / 73.2s | 39.8s / 61.9s |
+| runner p50 | 4.0s | 4.1s |
+| LLM p50 / p95 | 16.0s / 28.7s | 9.3s / 18.0s |
+| GitHub post p50 / p95 | 1.6s / 1.8s | 100.2s / 131.4s |
+| runner stage drained (pending=0, busy=0) | ~105s | 86s |
+| last review posted | t+258s | t+253s |
+| pool max / burst node | 4 / none | 16 (desired at t+10s, 16 Ready at t+78s) / 1× c8g.2xlarge spot, claimed t+10s, Ready t+42s, gone t+~360s |
+| failed / retried | 0 / 0 | 0 / 0 |
+| tokens | 436k in / 20k out ≈ $5.39 | 489k in / 23k out = $6.04 |
+| compute | ~$0.003 runner-seconds | $0.003 runner-seconds + ~$0.016 burst node (6 min of $0.15–0.18/hr spot) |
+
+**What scaled when.** Pending jumped to 52 at t+9s; KEDA/HPA asked for 16 at t+10s (5s scrape + 5s poll); Karpenter had a NodeClaim at the same tick and the node Ready at t+42s; 16 runners Running at t+78s; pending hit 0 at t+81s. Pending stayed 0, so after the 120s stabilization the HPA stepped 16→12→8→4 at t+175/235/295s and Karpenter consolidated the empty node ~60s after its last pod. Zero lost pods, zero requeues: scale-down never picked a busy runner.
+
+**Honest reading.** The loop works mechanically and the runner stage is no longer the bottleneck, but time-to-comment got *worse*, and for two reasons that have nothing to do with pods:
+1. **Serialized GitHub posting is now the dominant term.** Every write (review + check-run finish, two per task) goes through one lock with a 1.5s gap, so a task costs ~3.5–4s of posting and 56 tasks have a ~170s floor of pure gaps; with 32 review workers finishing together, 40+ reviews queued on that lock (`post` p50 100s). The fixed pool hid this: 12 workers and a 37s-spread arrival metered reviews out at roughly the rate the lock could post them, so `post` looked like 1.6s. The review worker also holds its slot (and its DB session) while waiting for the lock, so `prr_reviews_in_flight` reads 40+ when the LLM is mostly idle. Fix candidates, not done: post the review and finish the check in one write, drop the gap toward GitHub's documented 80 content writes/min (0.75s), or move posting to its own queue so the LLM pool is not blocked.
+2. **The ramp costs about what it saves.** Node Ready at 42s plus image pull and seed copy on a fresh node means 16 Ready pods at ~78s; at the floor the runner stage would have drained in ~105s anyway. For a 56-PR burst of 4-second tasks the elastic pool buys ~20s of runner-stage time. It would matter for a repo whose tests take minutes (click: 15s; a real suite: 5–20 min), which is the case to show rather than Flask.
+Also: with the cap tied to Ready pods, the cap *dips* while the pool refills (cap=1–2 at t+15–45s in both runs) because each pod serves one task and its replacement takes 10–20s to become Ready; the pod-per-task boundary is a throughput tax that autoscaling does not remove. The two runs are not perfectly matched (arrival spread, 12 vs 32 workers, the LLM was faster today), so the honest claim is: autoscaling moved the queue, it did not shorten it.
+
+**What broke on the way.** The first autoscaled run stalled: `REVIEW_WORKERS=32` against SQLAlchemy's default pool (5 + 10 overflow). Each review worker holds a session for its whole LLM call, so workers blocked on connections, `/api` timed out (the measurement script died), and three `on_result` writes timed out *after* the runner pod had been released, leaving tasks `running` in Postgres with no in-memory owner until the next restart's `reconcile()` requeued them (it did; all 56 eventually posted, 3 on attempt 2). Fixes: pool sized to `review_workers + 12` (+16 overflow), and a 30s `sweep_orphans()` that requeues DB-`running` tasks the scheduler is not tracking. Lesson: raising one concurrency knob silently assumes every pool behind it is at least as wide.
+

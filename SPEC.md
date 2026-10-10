@@ -20,7 +20,7 @@ Each row: what we chose, what we rejected, and the one-sentence Q&A answer.
 | 2 | Ingress **(changed)** | GitHub webhook → API Gateway → **Lambda (HMAC verify)** → SQS | API GW's direct SQS integration (cannot forward the signature header); ALB into the cluster; polling | "Nothing in the cluster is public and nothing unauthenticated reaches the queue. The queue is the burst buffer." |
 | 3 | Control plane | Custom Python controller (`kubernetes` client) | Pure KEDA ScaledJob (kept as the cold-start baseline in `deploy/baseline`) | "KEDA gives pod-per-task in 20 lines but no warm pool, no ranking, and the pod has to hold AWS creds to pull its own message." |
 | 4 | Warm pool mechanism **(changed)** | Runner `Deployment` of N idle pods; controller assigns via HTTP to pod IP; after one task the runner flips readiness to 503 and the **controller deletes the pod**; ReplicaSet refills | Exit-after-one (a Deployment restarts the container in place with a dirty workdir); reusing pods; Jobs | "Pod deletion is the ephemeral boundary; the ReplicaSet is the refill logic for free." |
-| 5 | Admission **(extended)** | Cap M on concurrent busy runners; rank pending by diff size (small first); separate `REVIEW_WORKERS` (12) for the LLM stage; busy pod disappears → immediate requeue (attempts ≤ 3) | FIFO; one concurrency knob for both stages | "One cap is wrong for a pipeline whose stages have different resource profiles: runners are CPU-bound for 4s, the LLM stage is I/O-bound for 15-60s." |
+| 5 | Admission **(extended)** | Cap M on concurrent busy runners, **M = Ready runner pods by default** (`ADMISSION_CAP=0`; positive = fixed override); rank pending by diff size (small first); separate `REVIEW_WORKERS` (32) for the LLM stage; busy pod disappears → immediate requeue (attempts ≤ 3). Pool autoscaled by a KEDA ScaledObject on `prr_tasks_pending` (4..16) + Karpenter; measured Oct 10: 16 runners in 78s, runner stage 86s vs ~105s fixed, but time-to-comment p50 165s vs 70s because serialized GitHub posting became the queue | FIFO; one concurrency knob for both stages; a static cap next to an elastic pool | "One cap is wrong for a pipeline whose stages have different resource profiles: runners are CPU-bound for 4s, the LLM stage is I/O-bound for 15-60s. And when the cap follows the pool, the next bottleneck is the egress." |
 | 6 | Trust boundary | **Split.** Runner pod has zero secrets, clones the public fork anonymously, runs tests, POSTs results back. Controller holds all secrets (from Secrets Manager), calls the LLM, posts the review, and serves a read-only git mirror for the agentic tools. | Runner does everything | "A malicious `conftest.py` can exfiltrate anything the pod can see. So the pod sees nothing." |
 | 7 | Pod hardening | `runAsNonRoot`, `readOnlyRootFilesystem` + `/work` emptyDir (seed clone copied in at boot), `automountServiceAccountToken: false`, drop all caps, CPU/mem limits, controller-enforced deadline, NetworkPolicy: ingress only from controller; egress only to controller, DNS, and **any host on 443 except RFC1918 and IMDS** (GitHub's CIDRs are not fixed) | Default pod spec | "Not a sandbox. gVisor or Firecracker is the real answer; this is the cheapest layer that stops the obvious attack. The 443 allow-list is the hole." |
 | 8 | LLM step **(extended)** | Structured call (JSON schema) with `reasoning.effort=high`. Four configs: `diff_only`; `full` (+ touched files + pytest/ruff + `read_file` ≤5); `guided` (full + mined guidelines); `agentic` (full + `read_file`/`grep`/`list_dir` against the mirror, ≤15 calls) | Single config | "Single structured call keeps the eval stable. Everything else is an ablation arm, and none of them beat the diff on this corpus." |
@@ -55,8 +55,8 @@ API Gateway (HTTP API) ──► Lambda: verify HMAC, drop pings ──► SQS p
    Secrets Manager ──(Pod Identity)──►  ┌─────────────────────────────┐
    pr-runtime/app                       │  controller (FastAPI, 1 pod) │  pinned to fixed nodes
                                         │  - SQS consume, dedupe      │
-                                        │  - rank (diff size), admit  │  cap M=4 runners
-                                        │  - assign → delete pod      │  REVIEW_WORKERS=12
+                                        │  - rank (diff size), admit  │  cap M = Ready runners (KEDA 4..16)
+                                        │  - assign → delete pod      │  REVIEW_WORKERS=32
                                         │  - lost-pod / deadline requeue, reconcile on restart
                                         │  - LLM review (4 configs)   │  git mirror in /tmp for agentic tools
                                         │  - serialized GitHub posts  │
@@ -117,7 +117,7 @@ API Gateway (HTTP API) ──► Lambda: verify HMAC, drop pings ──► SQS p
 - Tasks (live table via SSE, state/PR filters, phase bar with queue-wait segment, cold/warm dot, cost column, stats strip with pool $/hr), Task detail (findings with feedback, diff viewer, pytest/ruff, re-run with config select), Eval (summary table + recall bars from the published ConfigMap).
 
 ### 3.6 `deploy/`
-- `chart/` our Helm chart: controller (SA + RBAC + Service + Deployment + ServiceMonitor), runner pool, NetworkPolicy, Postgres StatefulSet; values pin models, cap, pool size, prices, secrets id. `baseline/` KEDA ScaledJob (cold-start baseline, disabled). `karpenter/` EC2NodeClass + NodePool. `monitoring/` kube-prometheus-stack values.
+- `chart/` our Helm chart: controller (SA + RBAC + Service + Deployment + ServiceMonitor), runner pool, **KEDA ScaledObject for the runner pool** (`runner.autoscale.*`: prometheus trigger `max(prr_tasks_pending)`, threshold 1/runner, 4..16 replicas, 120s scale-down window, 4 pods/min), NetworkPolicy, Postgres StatefulSet; values pin models, cap (0 = follow the pool), review workers, pool size, prices, secrets id. `baseline/` KEDA ScaledJob (cold-start baseline, disabled). `karpenter/` EC2NodeClass + NodePool. `monitoring/` kube-prometheus-stack values.
 
 ### 3.7 `dashboards/` Grafana JSON: pending / busy / idle / in-review stats, queue+pool+admission, rejects and cold assigns, time-to-comment p50/p95, wait-for-runner, phase p50, throughput and spend, runner pod counts.
 
@@ -174,7 +174,8 @@ Hard questions and prepared answers: `docs/TALK.md`.
 - API Gateway's SQS integration cannot forward headers into message attributes; hence Lambda.
 - A Deployment restarts an exited container in place; hence controller-side pod deletion.
 - GitHub forbids APPROVE/REQUEST_CHANGES from the PR author (single identity → COMMENT fallback) and secondary-rate-limits bursts of review creation (serialized posting).
-- The LLM stage, not the runners, is the bottleneck under burst; separate concurrency knob.
+- The LLM stage, not the runners, is the bottleneck under burst; separate concurrency knob. With the pool autoscaled and 32 review workers, the serialized GitHub posting (two writes per task, 1.5s gap) is the bottleneck instead (Oct 10).
+- Every review worker holds a DB session for its whole LLM call: the SQLAlchemy pool must be wider than `REVIEW_WORKERS` (it is sized `review_workers + 12`).
 - PR diffs are from the merge-base; a base branch that merely branched off main adds nothing to the diff.
 - Equivalent mutants exist (3 found); excluded from recall.
 - Elastic nodes: the controller once landed on a spot node and got drained with it; control plane and Postgres are now pinned.

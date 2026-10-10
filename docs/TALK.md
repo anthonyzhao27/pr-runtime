@@ -65,6 +65,8 @@ Cut to numbers slide.
 | cold baseline (KEDA ScaledJob, no pool, no LLM) | 1 | ~35s | — | ~15s (pod schedule) | 6s (+16s pod) | — |
 | quiet, warm pool (single PRs) | 20 | 24s | 72s | 0.5s | 3.9s | 14.9s / 25.1s |
 | burst (56 PRs, cap 4, pool 4) | 121 | 98s | 224s | 33s | 4.0s | 14.2s / 38.8s |
+| burst, fixed pool, `full` only (Oct 7, from Postgres) | 56 | 70s | 200s | 39s | 4.0s | 16.0s / 28.7s |
+| burst, autoscaled (KEDA 4→16 + Karpenter spot node, 32 workers; Oct 10) | 56 | 165s | 242s | 40s | 4.1s | 9.3s / 18.0s |
 
 Eval run 1 (gpt-6-astra @ high, judge gpt-6-luna): full = 35/35 strict, 34/35 semantic, FP 0/20; diff_only = 34/35 strict, 34/35 semantic, FP 0/20. One equivalent mutant excluded. Noisy v2 (bug inside a real 2-6 file upstream diff, n=11): full 10/11, diff_only 11/11 strict (10/11 semantic). Configs indistinguishable at this n.
 Guided (full + 44 mined guidelines): 45/46, FP 0/20, +3.6k tokens/PR, identical to full. Combined over all 46 bugs: full 97.8%, diff_only 97.8%, guided 97.8%; FP 0/20 for all three.
@@ -75,5 +77,6 @@ Karpenter: pool 4→16, node Ready in 41s, 16 runners in 49s; spot c7g.2xlarge a
 Multi-repo (pallets/click, never seen): clone 0.4s, install 3.0s, 2,238 tests 14.7s, 18.7s total vs ~4s on the warm Flask seed.
 GitHub App: reviews as pr-runtime[bot], Check run per task (blocks on blockers, never approves), @pr-runtime mention trigger.
 Tokens: ~4k in / 0.4k out per review. 112 reviews ≈ 0.45M input tokens.
+Autoscaled burst (Oct 10): HPA asked for 16 at t+10s, c8g.2xlarge spot node Ready at t+42s, 16 runners at t+78s, runner stage drained at t+86s (vs ~105s fixed); pool back to 4 by t+295s, node consolidated ~t+360s; 0 failed, 0 requeued; burst node ≈ $0.016, tokens $6.04. Time-to-comment got worse (p50 165s vs 70s) because GitHub posting is serialized (2 writes × 1.5s gap per task ≈ 170s floor for 56) and became the queue once runners and the LLM stopped metering reviews out: `post` p50 100s.
 
-Talking points from these: under burst, the runner is never the bottleneck (4s); queue wait (cap) and the LLM stage are. Pool N > cap M removes the refill wait; a separate LLM concurrency knob removes the review backlog. Cold vs warm matters most at the *first* wave; after that it is a throughput question.
+Talking points from these: under burst, the runner is never the bottleneck (4s); queue wait (cap) and the LLM stage are, and once those are opened up the serialized egress is. Autoscaling moved the queue, it did not shorten it. Pool N > cap M removes the refill wait; a separate LLM concurrency knob removes the review backlog. Cold vs warm matters most at the *first* wave; after that it is a throughput question.
