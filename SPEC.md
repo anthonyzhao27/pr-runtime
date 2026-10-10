@@ -6,7 +6,7 @@
 
 **Dates:** Oct 7 build start → core done Oct 7 night → stretch done Oct 8 → **video by Oct 13** → Oct 14 travel → Oct 15 onsite (30 min: ~12 talk, ~18 Q&A).
 
-This file was rewritten on Oct 9 to match what is deployed. The original plan's deviations are called out inline as **(changed)**; the reasons live in `docs/DECISIONS.md`.
+This file was rewritten on Oct 9 to match what is deployed. The original plan's deviations are called out inline as **(changed)**; the reasons live in local notes (`docs/`, not in the repo).
 
 ---
 
@@ -125,7 +125,7 @@ API Gateway (HTTP API) ──► Lambda: verify HMAC, drop pings/drafts/non-ment
 
 ### 3.7 `dashboards/` Grafana JSON: pending / busy / idle / in-review stats, queue+pool+admission, rejects and cold assigns, time-to-comment p50/p95, wait-for-runner, phase p50, throughput and spend, runner pod counts.
 
-### 3.8 `docs/` `ONBOARDING.md` (k8s/AWS/networking primer, read first), `DECISIONS.md` (the Q&A study guide, ~30 entries), `TALK.md` (outline, demo script, hard questions, numbers).
+### 3.8 `docs/` (local only, gitignored): onboarding notes, decision log, talk prep.
 
 ### 3.9 Driver box + `scripts/`
 - `scripts/driver.sh '<cmd>'` runs on the driver via SSM (base64 transport; `--bg`/`--get`). `driver_env.sh` materializes `.env` from Secrets Manager and logs `gh` in. `Makefile`: `build-controller`, `build-runner`, `push`, `rollout`, `eval-env`.
@@ -156,7 +156,7 @@ Target under 4 minutes. Record 3+ takes; keep raw screen recordings.
 6. **Eval** (1.5 min): four configs, historical vs synthetic, FP on real merged PRs; "context beyond the diff did not measurably help here."
 7. **What surprised me / what I'd change** (0.5 min): from `DECISIONS.md`.
 
-Hard questions and prepared answers: `docs/TALK.md`.
+Hard questions and prepared answers live in local notes.
 
 ---
 
@@ -215,7 +215,7 @@ pr-runtime/
   deploy/karpenter    EC2NodeClass + NodePool
   deploy/monitoring   kube-prometheus-stack values
   dashboards/         Grafana JSON
-  docs/               CRASH-COURSE.md, PROJECT-WALKTHROUGH.md, ONBOARDING.md, DIAGRAMS.md, DECISIONS.md, TALK.md
+  docs/               (gitignored; personal notes)
   scripts/            driver.sh, driver_env.sh, create_webhook.sh (fallback), sync_secret.sh, open_prs.py, burst_rerun.py, publish_eval.sh, publish_guidelines.sh, smoke_rerun.sh
 ```
 

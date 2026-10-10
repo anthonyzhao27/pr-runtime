@@ -8,4 +8,5 @@
 __pycache__/
 console/node_modules/
 controller/static/
+docs/
 eval/results/*/raw.json

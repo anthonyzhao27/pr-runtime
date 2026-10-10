@@ -15,12 +15,6 @@ GitHub App events → API Gateway → Lambda (HMAC) → SQS → controller ─�
 ```
 
 - `SPEC.md` — design, decisions table, schedule, stretch list
-- `docs/CRASH-COURSE.md` — general Kubernetes crash course (generic example, ASCII diagrams), read this first
-- `docs/PROJECT-WALKTHROUGH.md` — how Kubernetes is used in this specific cluster
-- `docs/ONBOARDING.md` — the Kubernetes / AWS / networking reference
-- `docs/DIAGRAMS.md` — cluster internals and whole-system Mermaid diagrams
-- `docs/DECISIONS.md` — what broke and why
-- `docs/TALK.md` — talk outline and Q&A prep
 - `infra/` Terraform · `controller/` FastAPI control plane · `runner/` untrusted executor · `console/` React UI
 - `deploy/chart` Helm chart · `deploy/baseline` KEDA cold-start baseline · `eval/` corpus, runner, scorer
 - `dashboards/` Grafana
