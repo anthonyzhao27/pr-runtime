@@ -14,6 +14,9 @@ resource "aws_secretsmanager_secret_version" "app" {
     GITHUB_BOT_TOKEN  = local.dotenv["GITHUB_BOT_TOKEN"]
     POSTGRES_PASSWORD = local.dotenv["POSTGRES_PASSWORD"]
     JUDGE_MODEL       = lookup(local.dotenv, "JUDGE_MODEL", "")
+    # GitHub App (S4): the App signs JWTs with this key to mint short-lived installation tokens.
+    GITHUB_APP_ID          = lookup(local.dotenv, "GITHUB_APP_ID", "")
+    GITHUB_APP_PRIVATE_KEY = fileexists("${path.module}/../app-private-key.pem") ? file("${path.module}/../app-private-key.pem") : ""
   })
 }
 
