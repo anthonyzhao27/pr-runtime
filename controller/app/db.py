@@ -133,7 +133,12 @@ def _iso(t: dt.datetime | None) -> str | None:
     return t.isoformat() if t else None
 
 
-engine = create_engine(settings.database_url or "sqlite:///./dev.db", pool_pre_ping=True, future=True)
+# Every review worker holds a session for the length of its LLM call (15-60s), so the pool must be at least that
+# wide plus headroom for the scheduler, the SQS consumer and API handlers; the SQLAlchemy default (5 + 10 overflow)
+# starved under REVIEW_WORKERS=32 and stalled /api and result bookkeeping.
+_pool = {} if (settings.database_url or "").startswith("sqlite") or not settings.database_url else \
+    {"pool_size": settings.review_workers + 12, "max_overflow": 16, "pool_timeout": 30}
+engine = create_engine(settings.database_url or "sqlite:///./dev.db", pool_pre_ping=True, future=True, **_pool)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=Session)
 
 

@@ -89,12 +89,34 @@ class Scheduler:
             self.reconcile()
         except Exception:  # noqa: BLE001
             log.exception("reconcile failed")
+        n = 0
         while not self._stop.is_set():
             try:
                 self.tick()
+                n += 1
+                if n % 30 == 0:
+                    self.sweep_orphans()
             except Exception:  # noqa: BLE001
                 log.exception("tick failed")
             time.sleep(1.0)
+
+    def sweep_orphans(self) -> None:
+        """A task the DB calls running but memory does not track can only happen when a write failed after the pod was
+        released (seen under DB-pool starvation). Without this it would wait for a restart's reconcile()."""
+        with self.lock:
+            tracked = set(self.busy)
+        with SessionLocal() as s:
+            rows = s.query(Task).filter(Task.state == "running").all()
+            orphans = [t for t in rows if t.id not in tracked and t.admitted_at and (now() - t.admitted_at).total_seconds() > 30]
+            for t in orphans:
+                t.state = "queued"
+                t.error = f"result bookkeeping lost on {t.runner_pod}; requeued"
+                t.runner_pod = None
+            s.commit()
+            orphans = [(t.id, t.priority) for t in orphans]
+        for tid, prio in orphans:
+            log.warning("orphaned running task %s requeued", tid)
+            self.enqueue(tid, prio)
 
     def stop(self) -> None:
         self._stop.set()

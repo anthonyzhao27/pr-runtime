@@ -24,12 +24,19 @@ NS = "pr-runtime"
 BASE = "http://localhost:18000"
 
 
-def api(path: str, data: dict | None = None):
+def api(path: str, data: dict | None = None, timeout: float = 60, retries: int = 3):
     req = urllib.request.Request(BASE + path, method="POST" if data is not None else "GET",
                                  data=json.dumps(data).encode() if data is not None else None,
                                  headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=20) as r:
-        return json.loads(r.read())
+    for i in range(retries):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read())
+        except Exception as e:  # noqa: BLE001
+            if data is not None or i == retries - 1:  # never retry a POST (it would fire a second rerun)
+                raise
+            print(f"api {path}: {e!r}; retrying", flush=True)
+            time.sleep(3)
 
 
 def metrics() -> dict:
@@ -147,7 +154,12 @@ def main() -> int:
         done: dict[str, dict] = {}
         while len(done) < len(ids):
             time.sleep(5)
-            for row in api("/api/tasks?limit=200"):
+            try:
+                rows = api("/api/tasks?limit=200")
+            except Exception as e:  # noqa: BLE001
+                print(f"poll failed: {e!r}", flush=True)
+                continue
+            for row in rows:
                 if row["id"] in ids and row["state"] in ("posted", "failed", "superseded"):
                     done[row["id"]] = row
             m = samples[-1].get("m", {}) if samples else {}
