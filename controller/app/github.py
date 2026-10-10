@@ -112,10 +112,13 @@ def check_start(repo: str, head_sha: str, installation_id: int | None, details_u
     if not (settings.checks_enabled and installation_id and github_app.configured()):
         return None
     try:
-        r = _request("POST", f"{API}/repos/{repo}/check-runs", installation_id, json={
-            "name": "pr-runtime", "head_sha": head_sha, "status": "in_progress",
-            "details_url": details_url, "output": {"title": "Reviewing", "summary": "Running tests and reviewing the diff."},
-        })
+        payload = {"name": "pr-runtime", "head_sha": head_sha, "status": "in_progress",
+                   "output": {"title": "Reviewing", "summary": "Running tests and reviewing the diff."}}
+        if details_url:
+            payload["details_url"] = details_url
+        r = _request("POST", f"{API}/repos/{repo}/check-runs", installation_id, json=payload)
+        if r.status_code >= 400:
+            log.warning("check_start %s: %s", r.status_code, r.text[:300])
         r.raise_for_status()
         return r.json()["id"]
     except Exception as e:  # noqa: BLE001
