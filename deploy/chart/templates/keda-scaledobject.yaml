@@ -1,0 +1,44 @@
+{{- if and .Values.runner.enabled .Values.runner.autoscale.enabled }}
+# Closes the autoscaling loop for the warm pool. KEDA reads the controller's own backlog gauge from Prometheus and
+# drives an HPA on the runner Deployment: desired = ceil(max(prr_tasks_pending) / threshold), clamped to min..max.
+# The controller's cap follows the Ready runner count (ADMISSION_CAP=0), so more replicas = more admission, and
+# Karpenter adds a burst node when the extra pods go Pending. The controller still deletes each pod after one task;
+# the HPA only sets .spec.replicas and the ReplicaSet keeps that many pods alive, so per-task deletion is unaffected.
+# Scale-down is deliberately slow (120s window, 4 pods/min) so a lull between waves does not flap the pool, and so a
+# busy pod is very unlikely to be chosen for removal (a lost pod would just be requeued, attempts <= 3).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: runner
+spec:
+  scaleTargetRef:
+    name: runner
+  minReplicaCount: {{ .Values.runner.autoscale.minReplicas }}
+  maxReplicaCount: {{ .Values.runner.autoscale.maxReplicas }}
+  pollingInterval: {{ .Values.runner.autoscale.pollingInterval }}
+  cooldownPeriod: {{ .Values.runner.autoscale.cooldownPeriod }}
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          selectPolicy: Max
+          policies:
+            - type: Pods
+              value: {{ .Values.runner.autoscale.maxReplicas }}
+              periodSeconds: 15
+        scaleDown:
+          stabilizationWindowSeconds: {{ .Values.runner.autoscale.scaleDownStabilizationSeconds }}
+          selectPolicy: Min
+          policies:
+            - type: Pods
+              value: 4
+              periodSeconds: 60
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: {{ .Values.runner.autoscale.prometheusUrl | quote }}
+        query: max(prr_tasks_pending)
+        threshold: {{ .Values.runner.autoscale.threshold | quote }}
+        activationThreshold: "0"
+{{- end }}

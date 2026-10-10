@@ -21,8 +21,10 @@ class Settings:
     judge_model: str = os.environ.get("JUDGE_MODEL", "")
     reasoning_effort: str = os.environ.get("REASONING_EFFORT", "high")  # low | medium | high | xhigh
     default_config: str = os.environ.get("DEFAULT_CONFIG", "full")  # full | diff_only
-    admission_cap: int = _int("ADMISSION_CAP", 4)
-    review_workers: int = _int("REVIEW_WORKERS", 12)  # LLM stage is I/O bound; separate knob from the runner cap
+    # 0 = the cap follows the pool: each tick the effective cap is the number of Ready runner pods, so KEDA/Karpenter
+    # growing the Deployment grows admission with it. A positive value is a fixed override (the Oct 7 baseline used 4).
+    admission_cap: int = _int("ADMISSION_CAP", 0)
+    review_workers: int = _int("REVIEW_WORKERS", 32)  # LLM stage is I/O bound; separate knob from the runner cap
     task_deadline: int = _int("TASK_DEADLINE_SECONDS", 300)
     runner_selector: str = os.environ.get("RUNNER_SELECTOR", "app=runner")
     runner_port: int = _int("RUNNER_PORT", 8080)
@@ -54,8 +56,13 @@ class Settings:
     def tokens_usd(self, tokens_in: int, tokens_out: int) -> float:
         return tokens_in / 1e6 * self.price_input_per_m + tokens_out / 1e6 * self.price_output_per_m
 
-    def pool_standing_usd_per_hour(self) -> float:
-        return self.pool_size * self.node_usd_per_hour * (self.runner_cpu_limit / self.node_vcpu)
+    def effective_cap(self, ready_runners: int) -> int:
+        return self.admission_cap if self.admission_cap > 0 else ready_runners
+
+    def pool_standing_usd_per_hour(self, runners: int | None = None) -> float:
+        """Standing cost of the warm pool. Uses the live runner count when known (the pool autoscales), else POOL_SIZE."""
+        n = self.pool_size if runners is None else runners
+        return n * self.node_usd_per_hour * (self.runner_cpu_limit / self.node_vcpu)
 
 
 settings = Settings()

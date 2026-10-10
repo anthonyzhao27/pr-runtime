@@ -27,6 +27,8 @@ class Scheduler:
         self.assigned_pods: set[str] = set()
         self.bad_pods: dict[str, float] = {}
         self.pods = RunnerPods()
+        self.ready_count = 0
+        self.cap = settings.admission_cap
         self.review_pool = ThreadPoolExecutor(max_workers=settings.review_workers, thread_name_prefix="review")
         self._stop = threading.Event()
 
@@ -81,8 +83,8 @@ class Scheduler:
             pass
 
     def run(self) -> None:
-        log.info("scheduler started cap=%s deadline=%ss review_workers=%s", settings.admission_cap, settings.task_deadline,
-                 settings.review_workers)
+        log.info("scheduler started cap=%s deadline=%ss review_workers=%s",
+                 settings.admission_cap or "pool (ready runners)", settings.task_deadline, settings.review_workers)
         try:
             self.reconcile()
         except Exception:  # noqa: BLE001
@@ -104,18 +106,24 @@ class Scheduler:
         idle = [p for p in ready if p["name"] not in self.assigned_pods and p["name"] not in self.bad_pods]
         # Warmest first: the oldest ready pod has had the longest to settle.
         idle.sort(key=lambda p: p["started"])
+        # Cap follows the pool: with ADMISSION_CAP=0 the cap is whatever is Ready right now, so an autoscaled
+        # Deployment (KEDA on prr_tasks_pending, Karpenter for nodes) raises admission as it grows.
+        cap = settings.effective_cap(len(ready))
 
         with self.lock:
+            self.ready_count, self.cap = len(ready), cap
+            metrics.runners_ready.set(len(ready))
+            metrics.admission_cap.set(cap)
             metrics.runners_idle.set(len(idle))
             metrics.runners_busy.set(len(self.busy))
             metrics.reviews_in_flight.set(self.review_pool._work_queue.qsize() + sum(1 for t in self.review_pool._threads if t.is_alive()) if hasattr(self.review_pool, "_threads") else 0)
             metrics.tasks_pending.set(len(self.pending))
 
-            if self.pending and len(self.busy) >= settings.admission_cap:
+            if self.pending and len(self.busy) >= cap:
                 metrics.admission_rejects.inc()
 
             to_assign: list[tuple[str, dict]] = []
-            while self.pending and len(self.busy) + len(to_assign) < settings.admission_cap and idle:
+            while self.pending and len(self.busy) + len(to_assign) < cap and idle:
                 _, _, task_id = heapq.heappop(self.pending)
                 pod = idle.pop(0)
                 to_assign.append((task_id, pod))
@@ -313,8 +321,9 @@ class Scheduler:
 
     def snapshot(self) -> dict:
         with self.lock:
-            return {"pending": len(self.pending), "busy": len(self.busy), "cap": settings.admission_cap,
+            return {"pending": len(self.pending), "busy": len(self.busy), "cap": self.cap,
+                    "cap_mode": "fixed" if settings.admission_cap > 0 else "pool", "runners_ready": self.ready_count,
                     "busy_tasks": {k: v["pod"] for k, v in self.busy.items()},
-                    "pool_standing_usd_per_hour": round(settings.pool_standing_usd_per_hour(), 4),
+                    "pool_standing_usd_per_hour": round(settings.pool_standing_usd_per_hour(self.ready_count), 4),
                     "prices": {"input_per_m": settings.price_input_per_m, "output_per_m": settings.price_output_per_m,
                                "node_usd_per_hour": settings.node_usd_per_hour}}

@@ -6,6 +6,8 @@ tasks_pending = Gauge("prr_tasks_pending", "Tasks admitted by the controller but
 runners_idle = Gauge("prr_runners_idle", "Warm runner pods ready and unassigned")
 reviews_in_flight = Gauge("prr_reviews_in_flight", "Tasks in the LLM review stage (queued + running)")
 runners_busy = Gauge("prr_runners_busy", "Runner pods currently executing a task")
+runners_ready = Gauge("prr_runners_ready", "Runner pods that are Ready (idle + busy); the pool as the scheduler sees it")
+admission_cap = Gauge("prr_admission_cap", "Effective admission cap this tick (ADMISSION_CAP, or the Ready runner count when 0)")
 admission_rejects = Counter("prr_admission_rejects_total", "Scheduler ticks where work waited because busy >= cap")
 tasks_total = Counter("prr_tasks_total", "Tasks by terminal state", ["state"])
 events_total = Counter("prr_webhook_events_total", "Webhook events consumed from SQS", ["action"])

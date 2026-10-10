@@ -95,7 +95,7 @@ spec:
             - name: CHECKS_ENABLED
               value: {{ .Values.controller.checksEnabled | default "true" | quote }}
             - name: REVIEW_WORKERS
-              value: {{ .Values.controller.reviewWorkers | default 12 | quote }}
+              value: {{ .Values.controller.reviewWorkers | default 32 | quote }}
             - name: REASONING_EFFORT
               value: {{ .Values.controller.reasoningEffort | default "high" | quote }}
             - name: POST_REVIEWS

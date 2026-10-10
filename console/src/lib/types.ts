@@ -70,6 +70,8 @@ export interface Stats {
     pending: number;
     busy: number;
     cap: number;
+    cap_mode?: "fixed" | "pool";
+    runners_ready?: number;
     busy_tasks: Record<string, string>;
     pool_standing_usd_per_hour: number;
     prices: { input_per_m: number; output_per_m: number; node_usd_per_hour: number };

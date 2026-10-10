@@ -6,7 +6,8 @@ image:
 controller:
   enabled: true
   replicas: 1
-  admissionCap: 4       # M: max runners busy at once
+  admissionCap: 0       # M: max runners busy at once. 0 = follow the pool (cap = Ready runner pods each tick); >0 = fixed override
+  reviewWorkers: 32     # LLM-stage concurrency (I/O bound); separate from the runner cap
   taskDeadlineSeconds: 300
   reviewerModel: gpt-6-astra
   judgeModel: gpt-6-luna
@@ -27,7 +28,16 @@ controller:
 
 runner:
   enabled: true
-  poolSize: 4           # N: idle warm pods
+  poolSize: 4           # N: idle warm pods (the floor; with autoscale this is also minReplicaCount)
+  autoscale:
+    enabled: true       # KEDA ScaledObject on max(prr_tasks_pending): ~one pending task per runner, 4..16 replicas
+    minReplicas: 4
+    maxReplicas: 16
+    pollingInterval: 5
+    cooldownPeriod: 120
+    prometheusUrl: http://kps-kube-prometheus-stack-prometheus.monitoring.svc:9090
+    threshold: "1"
+    scaleDownStabilizationSeconds: 120
   seedRepo: anthonyzhao27/flask   # baked into the image for the warm path; other repos clone on demand
   resources:
     requests: { cpu: 500m, memory: 512Mi }
