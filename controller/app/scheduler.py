@@ -72,6 +72,7 @@ class Scheduler:
         # release_fn (delete_message); the message stays in flight on SQS meanwhile, so KEDA counts it.
         self.leases: dict[str, str] = {}
         self.release_fn = None
+        self.reviews_active = 0  # tasks inside _review_and_post (the old gauge counted pool threads, which never exit)
         self.review_pool = ThreadPoolExecutor(max_workers=settings.review_workers, thread_name_prefix="review")
         self._stop = threading.Event()
 
@@ -203,7 +204,7 @@ class Scheduler:
             metrics.admission_cap.set(cap)
             metrics.runners_idle.set(len(idle))
             metrics.runners_busy.set(len(self.busy))
-            metrics.reviews_in_flight.set(self.review_pool._work_queue.qsize() + sum(1 for t in self.review_pool._threads if t.is_alive()) if hasattr(self.review_pool, "_threads") else 0)
+            metrics.reviews_in_flight.set(self.review_pool._work_queue.qsize() + self.reviews_active)
             metrics.tasks_pending.set(len(self.pending))
 
             if self.pending and len(self.busy) >= cap:
@@ -383,6 +384,15 @@ class Scheduler:
         self.review_pool.submit(self._review_and_post, task_id)
 
     def _review_and_post(self, task_id: str) -> None:
+        with self.lock:
+            self.reviews_active += 1
+        try:
+            self._review_and_post_inner(task_id)
+        finally:
+            with self.lock:
+                self.reviews_active -= 1
+
+    def _review_and_post_inner(self, task_id: str) -> None:
         with SessionLocal() as s:
             t = s.get(Task, task_id)
             if t is None or t.state != "reviewing":

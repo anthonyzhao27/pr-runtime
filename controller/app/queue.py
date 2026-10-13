@@ -36,6 +36,10 @@ class QueueConsumer:
         self._stop = threading.Event()
         # One worker keeps check-run opens in creation order; they serialize in the GitHub bucket anyway.
         self.checks_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="checks")
+        # Message handling (GitHub lookups -> Task row -> lease) runs in parallel; the receive loop stays single.
+        self.handlers = ThreadPoolExecutor(max_workers=settings.queue_workers, thread_name_prefix="sqs-handle")
+        self._handling = 0  # messages received but not yet turned into a task (or acked); counts against free slots
+        self._handling_lock = threading.Lock()
 
     def run(self) -> None:
         if not settings.queue_url:
@@ -52,8 +56,11 @@ class QueueConsumer:
             batch = 10
             if lease_mode:
                 # Pull only what the pool can run now. Everything else stays visible on SQS, which is the signal
-                # KEDA scales on (visible = waiting, in flight = leased and running).
-                batch = min(10, self.scheduler.free_slots())
+                # KEDA scales on (visible = waiting, in flight = leased and running). Messages still being handled
+                # are not in the scheduler's pending list yet, so they count against the free slots here.
+                with self._handling_lock:
+                    handling = self._handling
+                batch = min(10, self.scheduler.free_slots() - handling)
                 if batch <= 0:
                     self._stop.wait(0.5)
                     continue
@@ -65,14 +72,23 @@ class QueueConsumer:
                 self._stop.wait(5)
                 continue
             for m in resp.get("Messages", []):
-                receipt = m["ReceiptHandle"]
-                leased = False
-                try:
-                    task_id = self.handle(m, receipt=receipt if lease_mode else None)
-                    leased = task_id is not None and self.scheduler.holds_lease(task_id, receipt)
-                finally:
-                    if not leased:
-                        self._ack(receipt)  # ignored event, duplicate, or drain mode: nothing to hold
+                with self._handling_lock:
+                    self._handling += 1
+                self.handlers.submit(self._process, m, lease_mode)
+
+    def _process(self, m: dict, lease_mode: bool) -> None:
+        receipt = m["ReceiptHandle"]
+        leased = False
+        try:
+            task_id = self.handle(m, receipt=receipt if lease_mode else None)
+            leased = task_id is not None and self.scheduler.holds_lease(task_id, receipt)
+        except Exception:  # noqa: BLE001
+            log.exception("handle failed")
+        finally:
+            with self._handling_lock:
+                self._handling -= 1
+            if not leased:
+                self._ack(receipt)  # ignored event, duplicate, failure, or drain mode: nothing to hold
 
     def _ack(self, receipt: str) -> None:
         try:

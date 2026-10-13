@@ -41,7 +41,7 @@ def kube(*args: str) -> str:
 
 
 def sample(sqs, queue_url: str) -> dict:
-    s = {"t": time.time()}
+    s: dict = {"t": time.time()}
     try:
         s["m"] = metrics()
     except Exception as e:  # noqa: BLE001
@@ -112,7 +112,7 @@ def main() -> int:
         done = (s.get("sqs", {}).get("visible", 1) == 0 and s.get("sqs", {}).get("inflight", 1) == 0
                 and m.get("prr_runners_busy", 1) == 0 and m.get("prr_reviews_in_flight", 1) == 0
                 and s.get("hpa", {}).get("current") == floor and s.get("nodeclaims", 1) == 0)
-        if done or time.time() - t0 > a.settle_timeout:
+        if (done and time.time() - t0 > 45) or time.time() - t0 > a.settle_timeout:
             break
         time.sleep(5)
     with open(os.path.join(a.out, "samples.jsonl"), "w") as f:
@@ -123,7 +123,9 @@ def main() -> int:
     with urllib.request.urlopen(BASE + "/api/tasks?limit=500", timeout=30) as r:
         tasks = json.loads(r.read())
     tasks = tasks.get("tasks", tasks) if isinstance(tasks, dict) else tasks
-    mine = [t for t in tasks if (t.get("delivery") or "").startswith(f"burst-sqs-{int(t0)}-")]
+    import datetime as dt
+    since = dt.datetime.fromtimestamp(t0 - 2, dt.timezone.utc).isoformat()
+    mine = [t for t in tasks if t.get("action") == "mention" and (t.get("created_at") or "") >= since]
     with open(os.path.join(a.out, "tasks.json"), "w") as f:
         json.dump(mine, f, indent=1)
     tot = [t["timings"].get("total") for t in mine if t.get("timings") and t["timings"].get("total")]
