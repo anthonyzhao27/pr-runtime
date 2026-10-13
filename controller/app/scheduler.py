@@ -68,8 +68,33 @@ class Scheduler:
         self.pods = RunnerPods()
         self.ready_count = 0
         self.cap = settings.admission_cap
+        # QUEUE_MODE=lease: task_id -> SQS receipt handle, held until the runner stage ends. The consumer sets
+        # release_fn (delete_message); the message stays in flight on SQS meanwhile, so KEDA counts it.
+        self.leases: dict[str, str] = {}
+        self.release_fn = None
         self.review_pool = ThreadPoolExecutor(max_workers=settings.review_workers, thread_name_prefix="review")
         self._stop = threading.Event()
+
+    # ---- SQS leases -------------------------------------------------------------------------
+    def lease(self, task_id: str, receipt: str) -> None:
+        with self.lock:
+            self.leases[task_id] = receipt
+
+    def holds_lease(self, task_id: str, receipt: str) -> bool:
+        with self.lock:
+            return self.leases.get(task_id) == receipt
+
+    def release(self, task_id: str) -> None:
+        """Runner stage over for this task (result in, gave up, or superseded): ack its SQS message, if leased."""
+        with self.lock:
+            receipt = self.leases.pop(task_id, None)
+        if receipt and self.release_fn:
+            self.release_fn(receipt)
+
+    def free_slots(self) -> int:
+        """How many more tasks the pool can take right now: cap minus busy minus admitted-and-waiting."""
+        with self.lock:
+            return max(0, self.cap - len(self.busy) - len(self.pending))
 
     # ---- queue side -------------------------------------------------------------------------
     def enqueue(self, task_id: str, priority: int) -> None:
@@ -92,6 +117,7 @@ class Scheduler:
                 if b:
                     self.pods.delete(b["pod"])
                     self.assigned_pods.discard(b["pod"])
+                self.release(t.id)
                 metrics.tasks_total.labels(state="superseded").inc()
                 events.publish("task.updated", {"id": t.id, "state": "superseded"})
             s.commit()
@@ -259,6 +285,7 @@ class Scheduler:
                 t.state = "failed"
                 t.error = f"{reason}; gave up after {t.attempts} attempts (last {b['pod']})"
                 s.commit()
+                self.release(task_id)
                 metrics.tasks_total.labels(state="failed").inc()
             log.warning("task %s: %s on %s", task_id, reason, b["pod"])
             events.publish("task.updated", t.to_dict())
@@ -267,6 +294,7 @@ class Scheduler:
     def on_result(self, task_id: str, result: dict) -> None:
         with self.lock:
             b = self.busy.pop(task_id, None)
+        self.release(task_id)  # runner stage done either way; the LLM stage is not what the pool is sized for
         if b:
             # The pod did one task. Delete it; the ReplicaSet brings up a fresh warm one.
             self.pods.delete(b["pod"])

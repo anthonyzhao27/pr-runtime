@@ -1,11 +1,25 @@
 {{- if and .Values.runner.enabled .Values.runner.autoscale.enabled }}
-# Closes the autoscaling loop for the warm pool. KEDA reads the controller's own backlog gauge from Prometheus and
-# drives an HPA on the runner Deployment: desired = ceil(max(prr_tasks_pending) / threshold), clamped to min..max.
+# Closes the autoscaling loop for the warm pool. KEDA drives an HPA on the runner Deployment from one of two signals:
+#   sqs (default): the task queue itself, visible + in-flight. With QUEUE_MODE=lease the controller receives only what
+#     the pool can run and holds each message until the runner stage ends, so visible = waiting, in flight = running,
+#     and desired replicas = ceil(total / queueLength). Same shape as an ASG tracking SQS depth; KEDA reads SQS directly
+#     with its own Pod Identity role, so Prometheus being down does not freeze the pool.
+#   prometheus: max(prr_tasks_pending) scraped from the controller (the Oct 7-10 loop; needs QUEUE_MODE=drain).
 # The controller's cap follows the Ready runner count (ADMISSION_CAP=0), so more replicas = more admission, and
 # Karpenter adds a burst node when the extra pods go Pending. The controller still deletes each pod after one task;
 # the HPA only sets .spec.replicas and the ReplicaSet keeps that many pods alive, so per-task deletion is unaffected.
 # Scale-down is deliberately slow (120s window, 4 pods/min) so a lull between waves does not flap the pool, and so a
 # busy pod is very unlikely to be chosen for removal (a lost pod would just be requeued, attempts <= 3).
+{{- if eq .Values.runner.autoscale.signal "sqs" }}
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: keda-aws-pod-identity
+spec:
+  podIdentity:
+    provider: aws   # the keda-operator ServiceAccount has a Pod Identity association with sqs:GetQueueAttributes
+---
+{{- end }}
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -35,10 +49,22 @@ spec:
               value: 4
               periodSeconds: 60
   triggers:
+{{- if eq .Values.runner.autoscale.signal "sqs" }}
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: keda-aws-pod-identity
+      metadata:
+        queueURL: {{ .Values.controller.queueUrl | quote }}
+        queueLength: {{ .Values.runner.autoscale.queueLength | quote }}
+        activationQueueLength: "0"
+        scaleOnInFlight: "true"
+        awsRegion: {{ .Values.runner.autoscale.awsRegion | default "us-east-1" | quote }}
+{{- else }}
     - type: prometheus
       metadata:
         serverAddress: {{ .Values.runner.autoscale.prometheusUrl | quote }}
         query: max(prr_tasks_pending)
         threshold: {{ .Values.runner.autoscale.threshold | quote }}
         activationThreshold: "0"
+{{- end }}
 {{- end }}

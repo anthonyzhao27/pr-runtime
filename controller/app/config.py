@@ -24,6 +24,10 @@ class Settings:
     # 0 = the cap follows the pool: each tick the effective cap is the number of Ready runner pods, so KEDA/Karpenter
     # growing the Deployment grows admission with it. A positive value is a fixed override (the Oct 7 baseline used 4).
     admission_cap: int = _int("ADMISSION_CAP", 0)
+    # lease: receive from SQS only what the pool can run now and hold each message until the runner stage ends, so
+    # the queue's visible + in-flight counts are the real backlog and KEDA scales on them (Prometheus out of the loop).
+    # drain: take everything as it arrives (Oct 7-10 behaviour); backlog lives in Postgres and KEDA needs prr_tasks_pending.
+    queue_mode: str = os.environ.get("QUEUE_MODE", "lease")
     review_workers: int = _int("REVIEW_WORKERS", 32)  # LLM stage is I/O bound; separate knob from the runner cap
     task_deadline: int = _int("TASK_DEADLINE_SECONDS", 300)
     runner_selector: str = os.environ.get("RUNNER_SELECTOR", "app=runner")

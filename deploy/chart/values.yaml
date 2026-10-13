@@ -21,6 +21,8 @@ controller:
   mentionHandle: "@pr-runtime"
   checksEnabled: "true"
   queueUrl: https://sqs.us-east-1.amazonaws.com/511572480852/pr-runtime-tasks
+  queueMode: lease                # lease: pull only what the pool can run, ack when the runner stage ends (SQS = backlog)
+                                  # drain: take everything on arrival (backlog in Postgres; needs autoscale.signal=prometheus)
   postReviews: true
   resources:
     requests: { cpu: 250m, memory: 512Mi }
@@ -30,7 +32,11 @@ runner:
   enabled: true
   poolSize: 4           # N: idle warm pods (the floor; with autoscale this is also minReplicaCount)
   autoscale:
-    enabled: true       # KEDA ScaledObject on max(prr_tasks_pending): ~one pending task per runner, 4..16 replicas
+    enabled: true       # KEDA ScaledObject: ~one runner per queued-or-running task, 4..16 replicas
+    signal: sqs         # sqs: visible + in-flight messages on the task queue (needs controller.queueMode=lease)
+                        # prometheus: max(prr_tasks_pending) scraped from the controller (works with queueMode=drain)
+    queueLength: "1"    # sqs: target messages per runner replica
+    awsRegion: us-east-1
     minReplicas: 4
     maxReplicas: 16
     pollingInterval: 5
