@@ -53,7 +53,7 @@ flowchart TB
       CTRL["pod controller<br/>FastAPI: SQS consume, rank, admit (cap = Ready runners),<br/>assign, LLM review, GitHub App tokens, review + Check run,<br/>/metrics /api SSE, serves console<br/>readOnlyRoot, /tmp emptyDir holds git mirror"]
       CTRL_SVC["Service controller (ClusterIP :8000)"]
       RUN_DEP["Deployment runner, replicas 4..16<br/>(HPA sets .spec.replicas)"]
-      SO["ScaledObject runner (KEDA)<br/>trigger: Prometheus max(prr_tasks_pending)<br/>threshold 1/runner, min 4, max 16, scale-down 120s"]
+      SO["ScaledObject runner (KEDA)<br/>trigger: aws-sqs-queue, visible + in-flight on the task queue<br/>1 message/runner, min 4, max 16, scale-down 120s"]
       HPA["HPA keda-hpa-runner<br/>(created by KEDA)"]
       RUN_RS["ReplicaSet<br/>keeps N pods alive; replaces deleted ones = warm-pool refill"]
       RUN1["runner pod (idle, Ready)<br/>no SA token, no secrets,<br/>readOnlyRoot, /work emptyDir,<br/>drop ALL caps, limits 1 CPU / 1Gi<br/>readiness: 200 idle, 503 after a task<br/>seed repo warm; any other repo clones on demand"]
@@ -104,7 +104,7 @@ flowchart TB
     end
 
     subgraph NS_KEDA["namespace keda"]
-      KEDA["keda-operator<br/>polls Prometheus every 5s for the ScaledObject's query,<br/>drives the HPA (also ran the Oct 7 ScaledJob baseline)"]
+      KEDA["keda-operator<br/>polls SQS GetQueueAttributes every 5s with its own Pod Identity role,<br/>drives the HPA (also ran the Oct 7 ScaledJob baseline)"]
     end
   end
 

@@ -279,7 +279,7 @@ flowchart LR
 | Tool | Scales | Signal | Us |
 |---|---|---|---|
 | HPA | pods | CPU/memory | not used |
-| **KEDA** | pods / Jobs | external metric (Prometheus query, SQS depth, ...) | **live**: ScaledObject on the runner Deployment, `max(prr_tasks_pending)`, 4..16 replicas |
+| **KEDA** | pods / Jobs | external metric (SQS depth, Prometheus query, ...) | **live**: ScaledObject on the runner Deployment, SQS visible + in-flight (the controller leases only what the pool can run), 4..16 replicas |
 | **Karpenter** | **nodes** | Pending pods | burst capacity (spot Graviton) |
 | our controller | tasks onto pods | its own queue | the actual scheduler of work; cap = Ready runners |
 
@@ -412,7 +412,7 @@ Timing, quiet: assigned under 1s, runner about 4s (seed repo) or 20-30s (cold cl
 14. What is a PVC? A claim for storage; the EBS CSI driver turns it into an AZ-bound EBS volume.
 15. What does Karpenter react to? Pending pods. It picks the cheapest instance that fits them and consolidates idle nodes after 60s.
 16. What happens on a spot reclaim mid-task? Interruption queue, drain, pod vanishes, controller requeues immediately.
-17. KEDA vs Karpenter? KEDA scales pods from external metrics (ours: the controller's backlog gauge via Prometheus, 4..16 runners); Karpenter scales nodes when those pods go Pending. The controller's cap follows the Ready count, so all three layers move together.
+17. KEDA vs Karpenter? KEDA scales pods from external metrics (ours: the SQS task queue's visible + in-flight messages, 4..16 runners; the controller leases only what the pool can run, so the queue is the real backlog); Karpenter scales nodes when those pods go Pending. The controller's cap follows the Ready count, so all three layers move together. Prometheus is for dashboards only; scaled it to zero during a burst and the pool still went 4→16 in 8s.
 18. What is a CRD? A new object type; its operator is the controller loop that acts on it (NodePool, ScaledJob, ServiceMonitor).
 19. What does Helm do? Templates YAML and records the release. `helm template` shows what it applies.
 20. If the controller dies mid-review? The SQS message was already deleted; the row is in Postgres; `reconcile()` on boot resumes reviewing tasks and requeues running ones. Measured: 17 reviews resumed.

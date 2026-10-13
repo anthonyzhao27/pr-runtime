@@ -77,7 +77,7 @@ Eval: 46 bugs (8 historical, 38 synthetic incl. 11 hidden in real multi-file dif
 3. *Why does the runner have no secrets?* → It runs the PR's code. `pytest` imports it; a `conftest.py` can do anything. So the pod can only reach the controller, DNS, and port 443. Verified by trying from inside.
 4. *Why a pod per task and why delete it?* → Fresh workdir every time, nothing leaks between PRs. Deleting is the boundary; a container restart would reuse the pod.
 5. *Why Kubernetes at all for API calls?* → For a pure LLM reviewer you wouldn't. I ran untrusted code per task, which needs isolation, a warm pool, and burst, and that's your platform's shape. Lambda per task would be the other reasonable choice.
-6. *What's KEDA vs Karpenter?* → KEDA sets how many runner pods from my backlog metric; Karpenter adds nodes when those pods don't fit. My controller's admission cap follows the Ready count.
+6. *What's KEDA vs Karpenter?* → KEDA sets how many runner pods from the SQS queue depth (visible + in flight; the controller leases only what it can run, like an ASG tracking SQS); Karpenter adds nodes when those pods don't fit. My controller's admission cap follows the Ready count. First version scaled on my own gauge through Prometheus, which made Prometheus a single point of failure for scaling; fixed Oct 12 and verified with Prometheus off.
 7. *What happens if a runner dies mid-task?* → The controller sees the pod vanish and requeues immediately. Tested by draining a spot node: one retry, nothing failed.
 8. *What happens if your controller dies?* → State is in Postgres. On boot it re-enqueues running and queued tasks and resumes reviews. Tested: 17 reviews resumed after a restart.
 9. *Can the bot approve a PR?* → Technically yes, it shouldn't. It posts findings and a Check that can block; approval stays with humans or a ruleset.
@@ -104,6 +104,7 @@ Eval: 46 bugs (8 historical, 38 synthetic incl. 11 hidden in real multi-file dif
 - Why Terraform rolled every node once (module tracks latest AMI; now pinned).
 - Secondary rate limits; per-installation tokens; check-run ids overflow int32.
 - SQLAlchemy pool starved by 32 review workers.
+- Lease vs drain: why the queue read ~0 under the old design, why leasing makes SQS the truth, what the visibility timeout (600s) means for a lost controller, why priority-by-diff-size was given up.
 
 If any of these come up, answer from `docs/DECISIONS.md`; each has an entry.
 
@@ -139,6 +140,7 @@ Karpenter: pool 4→16, node Ready in 41s, 16 runners in 49s; spot c7g.2xlarge a
 Multi-repo (pallets/click, never seen): clone 0.4s, install 3.0s, 2,238 tests 14.7s, 18.7s total vs ~4s on the warm Flask seed.
 GitHub App: reviews as pr-runtime[bot], Check run per task (blocks on blockers, never approves), @pr-runtime mention trigger.
 Tokens: ~4k in / 0.4k out per review. 112 reviews ≈ 0.45M input tokens.
+SQS-lease burst (Oct 12, 24 mention messages sent in 0.3s, Prometheus scaled to 0 for the first 120s): HPA asked for 16 at t+8s, NodeClaim at t+16s, 16 runners Ready at t+71s, queue drained at t+118s, pool back to 4 and node gone at t+341s; 24/24 posted, 0 failed; wait-for-runner p50 0.6s; intake was the limiter (~5.5s/message: the mention path's reaction + check-open + review + check-finish all share the per-installation write bucket with a 1.5s gap), not the pool.
 Autoscaled burst (Oct 10): HPA asked for 16 at t+10s, c8g.2xlarge spot node Ready at t+42s, 16 runners at t+78s, runner stage drained at t+86s (vs ~105s fixed); pool back to 4 by t+295s, node consolidated ~t+360s; 0 failed, 0 requeued; burst node ≈ $0.016, tokens $6.04. Time-to-comment got worse (p50 165s vs 70s) because GitHub posting is serialized and became the queue once runners and the LLM stopped metering reviews out: `post` p50 100s. The two writes per task turned out to be the PAT self-review 422 + retry, not the Check.
 Posting burst (Oct 10, third run): same 56 PRs posted as the App with a Check each; writes bucketed per installation, one 1.5s gap per task. Time-to-comment p50 81s / p95 143s, post wait p50 23s / p95 61s, last review at t+151s (vs t+253s); 168 writes, none rate-limited; 0 failed. Honest reading: one installation means the buckets could not help here; most of the gain is "no self-review retry as the App" (one write per review instead of two). First attempt deadlocked (GitHub slot held across a Postgres row lock) and was fixed before the measurement. Private repos now get an API-diff fallback review labelled "Tests not run".
 
