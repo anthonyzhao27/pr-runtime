@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f2328"/>
+    </marker>
+    <marker id="arrg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/>
+    </marker>
+  </defs>
+  <rect width="1920" height="1080" fill="#ffffff"/>
+
+  <!-- AWS edge group -->
+  <rect x="330" y="300" width="560" height="190" rx="14" fill="#fff8ea" stroke="#d97706" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="350" y="332" font-size="22" fill="#92400e" font-weight="600">AWS edge (managed, nothing of ours is public)</text>
+
+  <!-- EKS group -->
+  <rect x="960" y="150" width="760" height="800" rx="14" fill="#f3f8ff" stroke="#1d4ed8" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="980" y="184" font-size="22" fill="#1e3a8a" font-weight="600">EKS cluster (3 fixed Graviton nodes + spot burst nodes)</text>
+
+  <!-- GitHub -->
+  <rect x="60" y="360" width="200" height="110" rx="12" fill="#f3f4f6" stroke="#6b7280" stroke-width="2"/>
+  <text x="160" y="405" font-size="28" text-anchor="middle" font-weight="600" fill="#111">GitHub</text>
+  <text x="160" y="440" font-size="20" text-anchor="middle" fill="#374151">PR opened · @pr-runtime</text>
+
+  <!-- API Gateway -->
+  <rect x="360" y="370" width="140" height="90" rx="12" fill="#fff" stroke="#d97706" stroke-width="2"/>
+  <text x="430" y="408" font-size="24" text-anchor="middle" font-weight="600" fill="#111">API</text>
+  <text x="430" y="438" font-size="24" text-anchor="middle" font-weight="600" fill="#111">Gateway</text>
+
+  <!-- Lambda -->
+  <rect x="540" y="360" width="160" height="110" rx="12" fill="#fff" stroke="#d97706" stroke-width="2"/>
+  <text x="620" y="398" font-size="24" text-anchor="middle" font-weight="600" fill="#111">Lambda</text>
+  <text x="620" y="426" font-size="18" text-anchor="middle" fill="#374151">verify signature</text>
+  <text x="620" y="450" font-size="18" text-anchor="middle" fill="#374151">filter events</text>
+
+  <!-- SQS -->
+  <rect x="740" y="370" width="130" height="90" rx="12" fill="#fff" stroke="#d97706" stroke-width="2"/>
+  <text x="805" y="408" font-size="24" text-anchor="middle" font-weight="600" fill="#111">SQS</text>
+  <text x="805" y="438" font-size="20" text-anchor="middle" fill="#374151">task queue</text>
+
+  <!-- Controller -->
+  <rect x="1010" y="520" width="300" height="140" rx="12" fill="#fff" stroke="#1d4ed8" stroke-width="2.5"/>
+  <text x="1160" y="560" font-size="28" text-anchor="middle" font-weight="600" fill="#111">controller</text>
+  <text x="1160" y="592" font-size="20" text-anchor="middle" fill="#374151">lease a task · pick a warm pod</text>
+  <text x="1160" y="618" font-size="20" text-anchor="middle" fill="#374151">review · post · delete the pod</text>
+
+  <!-- Runner pool -->
+  <rect x="1400" y="500" width="290" height="180" rx="12" fill="#fff" stroke="#1d4ed8" stroke-width="2.5"/>
+  <text x="1545" y="540" font-size="28" text-anchor="middle" font-weight="600" fill="#111">warm runner pool</text>
+  <text x="1545" y="572" font-size="22" text-anchor="middle" fill="#374151">4 .. 16 pods</text>
+  <text x="1545" y="604" font-size="20" text-anchor="middle" fill="#374151">one pod per task:</text>
+  <text x="1545" y="630" font-size="20" text-anchor="middle" fill="#374151">clone · pytest · ruff</text>
+  <text x="1545" y="656" font-size="20" text-anchor="middle" fill="#374151">then deleted, pool refills</text>
+
+  <!-- KEDA -->
+  <rect x="1400" y="220" width="290" height="100" rx="12" fill="#fff" stroke="#1d4ed8" stroke-width="2"/>
+  <text x="1545" y="258" font-size="24" text-anchor="middle" font-weight="600" fill="#111">KEDA → HPA</text>
+  <text x="1545" y="288" font-size="19" text-anchor="middle" fill="#374151">pods = queue waiting + running</text>
+
+  <!-- Karpenter -->
+  <rect x="1400" y="350" width="290" height="100" rx="12" fill="#fff" stroke="#1d4ed8" stroke-width="2"/>
+  <text x="1545" y="388" font-size="24" text-anchor="middle" font-weight="600" fill="#111">Karpenter</text>
+  <text x="1545" y="418" font-size="19" text-anchor="middle" fill="#374151">spot nodes when pods don't fit</text>
+
+  <!-- Postgres -->
+  <rect x="1010" y="740" width="200" height="100" rx="12" fill="#fff" stroke="#1d4ed8" stroke-width="2"/>
+  <text x="1110" y="780" font-size="24" text-anchor="middle" font-weight="600" fill="#111">Postgres</text>
+  <text x="1110" y="810" font-size="19" text-anchor="middle" fill="#374151">tasks · findings</text>
+
+  <!-- Grafana -->
+  <rect x="1250" y="740" width="250" height="100" rx="12" fill="#fff" stroke="#1d4ed8" stroke-width="2"/>
+  <text x="1375" y="780" font-size="24" text-anchor="middle" font-weight="600" fill="#111">Prometheus + Grafana</text>
+  <text x="1375" y="810" font-size="19" text-anchor="middle" fill="#374151">scrapes the controller</text>
+
+  <!-- OpenAI -->
+  <rect x="1010" y="30" width="200" height="90" rx="12" fill="#f3f4f6" stroke="#6b7280" stroke-width="2"/>
+  <text x="1110" y="66" font-size="26" text-anchor="middle" font-weight="600" fill="#111">OpenAI</text>
+  <text x="1110" y="98" font-size="20" text-anchor="middle" fill="#374151">gpt-6-astra</text>
+
+  <!-- Edges -->
+  <!-- 1 GitHub -> API GW -->
+  <line x1="260" y1="400" x2="358" y2="400" stroke="#1f2328" stroke-width="3" marker-end="url(#arr)"/>
+  <text x="309" y="390" font-size="19" text-anchor="middle" fill="#111" font-weight="600">1 webhook</text>
+  <!-- API GW -> Lambda -> SQS -->
+  <line x1="500" y1="415" x2="538" y2="415" stroke="#1f2328" stroke-width="3" marker-end="url(#arr)"/>
+  <line x1="700" y1="415" x2="738" y2="415" stroke="#1f2328" stroke-width="3" marker-end="url(#arr)"/>
+  <!-- 2 SQS -> controller (lease) -->
+  <path d="M870,430 C940,430 940,590 1008,590" fill="none" stroke="#1f2328" stroke-width="3" marker-end="url(#arr)"/>
+  <text x="905" y="520" font-size="19" text-anchor="middle" fill="#111" font-weight="600">2 lease</text>
+  <text x="905" y="542" font-size="19" text-anchor="middle" fill="#111" font-weight="600">a message</text>
+  <!-- queue depth -> KEDA (dotted) -->
+  <path d="M805,370 C805,200 1250,160 1398,250" fill="none" stroke="#6b7280" stroke-width="2.5" stroke-dasharray="7 6" marker-end="url(#arrg)"/>
+  <text x="1300" y="205" font-size="18" text-anchor="middle" fill="#4b5563">queue depth</text>
+  <!-- KEDA -> pool (replicas) -->
+  <line x1="1545" y1="320" x2="1545" y2="348" stroke="#1f2328" stroke-width="2.5" marker-end="url(#arr)"/>
+  <line x1="1545" y1="450" x2="1545" y2="498" stroke="#1f2328" stroke-width="2.5" marker-end="url(#arr)"/>
+  <text x="1600" y="480" font-size="18" fill="#4b5563">replicas / nodes</text>
+  <!-- 3 controller -> pool -->
+  <line x1="1310" y1="560" x2="1398" y2="560" stroke="#1f2328" stroke-width="3" marker-end="url(#arr)"/>
+  <text x="1354" y="548" font-size="19" text-anchor="middle" fill="#111" font-weight="600">3 repo + SHA</text>
+  <!-- 4 pool -> controller -->
+  <line x1="1398" y1="630" x2="1312" y2="630" stroke="#1f2328" stroke-width="3" marker-end="url(#arr)"/>
+  <text x="1354" y="660" font-size="19" text-anchor="middle" fill="#111" font-weight="600">4 test result</text>
+  <!-- pool -> GitHub git fetch (goes under) -->
+  <path d="M1545,680 L1545,900 L160,900 L160,472" fill="none" stroke="#6b7280" stroke-width="2.5" stroke-dasharray="7 6" marker-end="url(#arrg)"/>
+  <text x="850" y="890" font-size="18" text-anchor="middle" fill="#4b5563">anonymous git fetch (public repos)</text>
+  <!-- 5 controller -> OpenAI -->
+  <line x1="1110" y1="520" x2="1110" y2="122" stroke="#1f2328" stroke-width="3" marker-end="url(#arr)"/>
+  <text x="1125" y="330" font-size="19" fill="#111" font-weight="600">5 diff + evidence</text>
+  <!-- 6 controller -> GitHub (review) -->
+  <path d="M1010,640 L940,640 L940,1000 L160,1000 L160,472" fill="none" stroke="#1f2328" stroke-width="3" marker-end="url(#arr)"/>
+  <text x="550" y="990" font-size="19" text-anchor="middle" fill="#111" font-weight="600">6 inline review + Check run, posted as pr-runtime[bot]</text>
+  <!-- controller -> Postgres -->
+  <line x1="1110" y1="660" x2="1110" y2="738" stroke="#1f2328" stroke-width="2.5" marker-end="url(#arr)"/>
+  <!-- Grafana scrape (dotted) -->
+  <path d="M1375,740 L1375,700 L1240,700 L1240,660" fill="none" stroke="#6b7280" stroke-width="2.5" stroke-dasharray="7 6" marker-end="url(#arrg)"/>
+</svg>
