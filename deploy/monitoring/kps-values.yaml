@@ -21,3 +21,7 @@ grafana:
     dashboards:
       enabled: true
       label: grafana_dashboard
+kube-state-metrics:
+  # Export node capacity-type labels so the dashboard can split fixed on-demand nodes from Karpenter spot nodes.
+  metricLabelsAllowlist:
+    - nodes=[karpenter.sh/capacity-type,eks.amazonaws.com/capacityType,karpenter.sh/nodepool]
