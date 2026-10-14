@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#14141a"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#059669"/>
+    </marker>
+  </defs>
+  <rect width="1920" height="1080" fill="#ffffff"/>
+
+  <!-- cluster -->
+  <rect x="400" y="70" width="1460" height="940" rx="22" fill="#f6f8fc" stroke="#9aa6bd" stroke-width="2.5" stroke-dasharray="10 8"/>
+  <text x="430" y="114" font-size="28" fill="#6b7280" font-weight="600">EKS</text>
+
+  <!-- SQS -->
+  <rect x="70" y="470" width="230" height="140" rx="18" fill="#fff8ea" stroke="#d97706" stroke-width="3"/>
+  <text x="185" y="555" font-size="42" font-weight="700" text-anchor="middle" fill="#14141a">SQS</text>
+
+  <!-- KEDA -->
+  <rect x="500" y="160" width="270" height="120" rx="18" fill="#ffffff" stroke="#14141a" stroke-width="3"/>
+  <text x="635" y="234" font-size="40" font-weight="700" text-anchor="middle" fill="#14141a">KEDA</text>
+
+  <!-- Karpenter -->
+  <rect x="1490" y="160" width="300" height="120" rx="18" fill="#ffffff" stroke="#14141a" stroke-width="3"/>
+  <text x="1640" y="234" font-size="40" font-weight="700" text-anchor="middle" fill="#14141a">Karpenter</text>
+
+  <!-- Controller -->
+  <rect x="500" y="800" width="270" height="120" rx="18" fill="#ffffff" stroke="#14141a" stroke-width="3"/>
+  <text x="635" y="874" font-size="40" font-weight="700" text-anchor="middle" fill="#14141a">controller</text>
+
+  <!-- Fixed node -->
+  <rect x="880" y="400" width="400" height="330" rx="18" fill="#ffffff" stroke="#14141a" stroke-width="3"/>
+  <text x="1080" y="775" font-size="28" text-anchor="middle" fill="#14141a">on-demand nodes</text>
+  <!-- 4 warm pods -->
+  <g fill="#1d4ed8">
+    <rect x="950" y="460" width="110" height="110" rx="16"/>
+    <rect x="1100" y="460" width="110" height="110" rx="16"/>
+    <rect x="950" y="590" width="110" height="110" rx="16" opacity="0.999"/>
+    <rect x="1100" y="590" width="110" height="110" rx="16"/>
+  </g>
+  <text x="1080" y="450" font-size="24" text-anchor="middle" fill="#1d4ed8" font-weight="600">4 warm pods</text>
+
+  <!-- Spot node -->
+  <rect x="1360" y="400" width="430" height="330" rx="18" fill="#ffffff" stroke="#059669" stroke-width="3" stroke-dasharray="12 9"/>
+  <text x="1575" y="775" font-size="28" text-anchor="middle" fill="#059669">spot node</text>
+  <g fill="none" stroke="#1d4ed8" stroke-width="3" stroke-dasharray="8 7">
+    <rect x="1400" y="460" width="80" height="80" rx="12"/>
+    <rect x="1495" y="460" width="80" height="80" rx="12"/>
+    <rect x="1590" y="460" width="80" height="80" rx="12"/>
+    <rect x="1685" y="460" width="80" height="80" rx="12"/>
+    <rect x="1400" y="555" width="80" height="80" rx="12"/>
+    <rect x="1495" y="555" width="80" height="80" rx="12"/>
+    <rect x="1590" y="555" width="80" height="80" rx="12"/>
+    <rect x="1685" y="555" width="80" height="80" rx="12"/>
+    <rect x="1400" y="650" width="80" height="60" rx="12"/>
+    <rect x="1495" y="650" width="80" height="60" rx="12"/>
+    <rect x="1590" y="650" width="80" height="60" rx="12"/>
+    <rect x="1685" y="650" width="80" height="60" rx="12"/>
+  </g>
+  <text x="1575" y="450" font-size="24" text-anchor="middle" fill="#1d4ed8" font-weight="600">+12 on burst</text>
+
+  <!-- SQS -> KEDA : queue depth -->
+  <path d="M185,470 L185,220 L496,220" fill="none" stroke="#14141a" stroke-width="3.5" marker-end="url(#a)"/>
+  <text x="200" y="345" font-size="28" fill="#14141a">queue depth</text>
+
+  <!-- KEDA -> pods : replicas -->
+  <path d="M635,280 L635,330 L1000,330 L1000,396" fill="none" stroke="#14141a" stroke-width="3.5" marker-end="url(#a)"/>
+  <path d="M1000,330 L1420,330 L1420,396" fill="none" stroke="#14141a" stroke-width="3.5" marker-end="url(#a)"/>
+  <text x="660" y="380" font-size="28" fill="#14141a">pods 4–16</text>
+
+  <!-- spot node pending -> Karpenter ; Karpenter -> spot node -->
+  <path d="M1700,396 L1700,284" fill="none" stroke="#059669" stroke-width="3.5" stroke-dasharray="9 7" marker-end="url(#ag)"/>
+  <text x="1715" y="350" font-size="26" fill="#059669">Pending</text>
+  <path d="M1640,284 L1640,396" fill="none" stroke="#059669" stroke-width="3.5" marker-end="url(#ag)"/>
+  <text x="1625" y="350" font-size="26" fill="#059669" text-anchor="end">+ node</text>
+
+  <!-- SQS -> controller : lease -->
+  <path d="M185,610 L185,860 L496,860" fill="none" stroke="#14141a" stroke-width="3.5" marker-end="url(#a)"/>
+  <text x="200" y="745" font-size="28" fill="#14141a">lease</text>
+
+  <!-- controller -> pods : 1 task per pod -->
+  <path d="M770,860 L930,860 L930,734" fill="none" stroke="#14141a" stroke-width="3.5" marker-end="url(#a)"/>
+  <text x="790" y="905" font-size="28" fill="#14141a">1 task / pod</text>
+</svg>

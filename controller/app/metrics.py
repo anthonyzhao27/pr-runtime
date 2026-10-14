@@ -3,6 +3,8 @@ from prometheus_client import Counter, Gauge, Histogram
 PHASE_BUCKETS = (0.5, 1, 2, 3, 5, 8, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300)
 
 tasks_pending = Gauge("prr_tasks_pending", "Tasks admitted by the controller but waiting for a runner")
+queue_visible = Gauge("prr_queue_visible", "SQS messages waiting in the queue (not yet leased by the controller)")
+queue_inflight = Gauge("prr_queue_inflight", "SQS messages leased: received and held until the runner stage ends")
 runners_idle = Gauge("prr_runners_idle", "Warm runner pods ready and unassigned")
 reviews_in_flight = Gauge("prr_reviews_in_flight", "Tasks in the LLM review stage (queued + running)")
 runners_busy = Gauge("prr_runners_busy", "Runner pods currently executing a task")

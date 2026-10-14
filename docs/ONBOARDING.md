@@ -155,7 +155,7 @@ Two separate systems, both involved.
 
 **CRD** (Custom Resource Definition) = a new object type added to the API server, usually shipped with an **operator** (a controller that acts on it). You will see:
 - `ServiceMonitor` (Prometheus operator): "scrape this Service's `/metrics` every 5s."
-- `ScaledObject` (KEDA): "keep the runner Deployment at ceil(backlog / 1) replicas, between 4 and 16," read from a Prometheus query. (The Oct 7 baseline used a `ScaledJob` instead.)
+- `ScaledObject` (KEDA): "keep the runner Deployment at ceil(backlog / 1) replicas, between 4 and 16," where backlog = messages visible + in flight on the SQS task queue (the controller only takes what it can run and acks when the runner finishes). (The Oct 7 baseline used a `ScaledJob` instead; until Oct 12 the signal was a Prometheus query of the controller's own gauge.)
 - `NodePool`, `EC2NodeClass`, `NodeClaim` (Karpenter): "when pods are unschedulable, launch an EC2 instance matching these constraints; remove it when idle."
 - `PolicyEndpoint` (VPC CNI): the compiled form of our NetworkPolicy.
 

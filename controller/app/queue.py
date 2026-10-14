@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import boto3
@@ -35,30 +36,81 @@ class QueueConsumer:
         self._stop = threading.Event()
         # One worker keeps check-run opens in creation order; they serialize in the GitHub bucket anyway.
         self.checks_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="checks")
+        # Message handling (GitHub lookups -> Task row -> lease) runs in parallel; the receive loop stays single.
+        self.handlers = ThreadPoolExecutor(max_workers=settings.queue_workers, thread_name_prefix="sqs-handle")
+        self._handling = 0  # messages received but not yet turned into a task (or acked); counts against free slots
+        self._handling_lock = threading.Lock()
 
     def run(self) -> None:
         if not settings.queue_url:
             log.warning("QUEUE_URL unset; consumer idle")
             return
-        log.info("consuming %s", settings.queue_url)
+        lease_mode = settings.queue_mode == "lease"
+        log.info("consuming %s (mode=%s)", settings.queue_url, settings.queue_mode)
+        self.scheduler.release_fn = self._ack
+        last_depth = 0.0
         while not self._stop.is_set():
+            if time.time() - last_depth >= 5:
+                self._depth()
+                last_depth = time.time()
+            batch = 10
+            if lease_mode:
+                # Pull only what the pool can run now. Everything else stays visible on SQS, which is the signal
+                # KEDA scales on (visible = waiting, in flight = leased and running). Messages still being handled
+                # are not in the scheduler's pending list yet, so they count against the free slots here.
+                with self._handling_lock:
+                    handling = self._handling
+                batch = min(10, self.scheduler.free_slots() - handling)
+                if batch <= 0:
+                    self._stop.wait(0.5)
+                    continue
             try:
-                resp = self.sqs.receive_message(QueueUrl=settings.queue_url, MaxNumberOfMessages=10,
-                                                WaitTimeSeconds=20, MessageAttributeNames=["All"])
+                resp = self.sqs.receive_message(QueueUrl=settings.queue_url, MaxNumberOfMessages=batch,
+                                                WaitTimeSeconds=10, MessageAttributeNames=["All"])
             except Exception:  # noqa: BLE001
                 log.exception("receive failed")
                 self._stop.wait(5)
                 continue
             for m in resp.get("Messages", []):
-                try:
-                    self.handle(m)
-                finally:
-                    self.sqs.delete_message(QueueUrl=settings.queue_url, ReceiptHandle=m["ReceiptHandle"])
+                with self._handling_lock:
+                    self._handling += 1
+                self.handlers.submit(self._process, m, lease_mode)
+
+    def _process(self, m: dict, lease_mode: bool) -> None:
+        receipt = m["ReceiptHandle"]
+        leased = False
+        try:
+            task_id = self.handle(m, receipt=receipt if lease_mode else None)
+            leased = task_id is not None and self.scheduler.holds_lease(task_id, receipt)
+        except Exception:  # noqa: BLE001
+            log.exception("handle failed")
+        finally:
+            with self._handling_lock:
+                self._handling -= 1
+            if not leased:
+                self._ack(receipt)  # ignored event, duplicate, failure, or drain mode: nothing to hold
+
+    def _ack(self, receipt: str) -> None:
+        try:
+            self.sqs.delete_message(QueueUrl=settings.queue_url, ReceiptHandle=receipt)
+        except Exception as e:  # noqa: BLE001
+            # A lease older than the visibility timeout was redelivered and acked under a newer receipt; harmless.
+            log.debug("delete_message failed (stale receipt?): %s", e)
+
+    def _depth(self) -> None:
+        try:
+            a = self.sqs.get_queue_attributes(QueueUrl=settings.queue_url, AttributeNames=[
+                "ApproximateNumberOfMessages", "ApproximateNumberOfMessagesNotVisible"])["Attributes"]
+            metrics.queue_visible.set(int(a.get("ApproximateNumberOfMessages", 0)))
+            metrics.queue_inflight.set(int(a.get("ApproximateNumberOfMessagesNotVisible", 0)))
+        except Exception as e:  # noqa: BLE001
+            log.debug("get_queue_attributes failed: %s", e)
 
     def stop(self) -> None:
         self._stop.set()
 
-    def handle(self, m: dict) -> None:
+    def handle(self, m: dict, receipt: str | None = None) -> str | None:
+        """Returns the task id it created (or found), None when the event was ignored."""
         body = json.loads(m["Body"])
         attrs = m.get("MessageAttributes") or {}
         gh_event = (attrs.get("event") or {}).get("StringValue", "pull_request")
@@ -72,38 +124,38 @@ class QueueConsumer:
             issue = body.get("issue") or {}
             comment = body.get("comment") or {}
             if "pull_request" not in issue or settings.mention_handle.lower() not in (comment.get("body") or "").lower():
-                return
+                return None
             metrics.events_total.labels(action="mention").inc()
             if not settings.repo_allowed(repo):
                 github.comment(repo, issue["number"], installation_id,
                                f"{settings.mention_handle} is not enabled for `{repo}` (allowlist: {', '.join(settings.repos)}).")
-                return
+                return None
             github.react(repo, comment["id"], installation_id, "eyes")
             shas = github.pr_head(repo, issue["number"], installation_id)
             if not shas:
-                return
-            self.create_task(repo=repo, pr_number=issue["number"], head_sha=shas[0], base_sha=shas[1], action="mention",
-                             delivery=delivery, installation_id=installation_id, trigger="mention")
-            return
+                return None
+            return self.create_task(repo=repo, pr_number=issue["number"], head_sha=shas[0], base_sha=shas[1],
+                                    action="mention", delivery=delivery, installation_id=installation_id,
+                                    trigger="mention", receipt=receipt)
 
         pr = body.get("pull_request") or {}
         if not pr or action in settings.ignore_actions:
-            return
+            return None
         if not settings.repo_allowed(repo):
             log.info("ignoring %s event from unlisted repo %s", action, repo)
-            return
+            return None
         # Per-repo policy: `.pr-runtime.yml` with `mode: mention` means only review when tagged.
         if repo_mode(repo, pr["head"]["sha"], installation_id) == "mention":
             log.info("repo %s is in mention mode; ignoring auto event for pr#%s", repo, pr["number"])
-            return
+            return None
         metrics.events_total.labels(action=action).inc()
-        self.create_task(repo=repo, pr_number=pr["number"], head_sha=pr["head"]["sha"], base_sha=pr["base"]["sha"],
-                         action=action, delivery=delivery, installation_id=installation_id,
-                         size_hint=int(pr.get("additions", 0)) + int(pr.get("deletions", 0)))
+        return self.create_task(repo=repo, pr_number=pr["number"], head_sha=pr["head"]["sha"], base_sha=pr["base"]["sha"],
+                                action=action, delivery=delivery, installation_id=installation_id,
+                                size_hint=int(pr.get("additions", 0)) + int(pr.get("deletions", 0)), receipt=receipt)
 
     def create_task(self, *, repo: str, pr_number: int, head_sha: str, base_sha: str, action: str = "manual",
                     delivery: str | None = None, config: str | None = None, size_hint: int | None = None,
-                    installation_id: int | None = None, trigger: str = "webhook") -> str:
+                    installation_id: int | None = None, trigger: str = "webhook", receipt: str | None = None) -> str:
         priority = size_hint if size_hint is not None else github.pr_size(repo, pr_number, installation_id)
         with SessionLocal() as s:
             dup = s.query(Task).filter(Task.repo == repo, Task.pr_number == pr_number, Task.head_sha == head_sha,
@@ -128,6 +180,8 @@ class QueueConsumer:
             s.commit()
             task_id = t.id
             snap = t.to_dict()
+        if receipt:
+            self.scheduler.lease(task_id, receipt)  # before enqueue, so a fast result cannot release first
         if action not in ("manual", "mention"):
             self.scheduler.supersede(repo, pr_number, task_id)
         if settings.checks_enabled and installation_id:

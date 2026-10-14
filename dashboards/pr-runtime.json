@@ -4,7 +4,7 @@
  "timezone": "browser",
  "refresh": "5s",
  "time": {
-  "from": "now-15m",
+  "from": "now-10m",
   "to": "now"
  },
  "schemaVersion": 39,
@@ -14,18 +14,298 @@
  ],
  "panels": [
   {
-   "type": "stat",
-   "title": "Pending (admitted, waiting for a runner)",
+   "type": "timeseries",
+   "title": "SQS queue",
    "gridPos": {
     "x": 0,
     "y": 0,
+    "w": 8,
+    "h": 10
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "max(prr_queue_visible)",
+     "legendFormat": "waiting",
+     "refId": "A"
+    },
+    {
+     "expr": "max(prr_queue_inflight)",
+     "legendFormat": "running",
+     "refId": "B"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "decimals": 0,
+     "min": 0,
+     "custom": {
+      "lineWidth": 3,
+      "fillOpacity": 15,
+      "lineInterpolation": "stepAfter",
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "waiting"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "orange"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "running"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "yellow"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Runner pods (KEDA)",
+   "gridPos": {
+    "x": 8,
+    "y": 0,
+    "w": 8,
+    "h": 10
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "max(kube_horizontalpodautoscaler_status_desired_replicas{horizontalpodautoscaler=\"keda-hpa-runner\"})",
+     "legendFormat": "KEDA target",
+     "refId": "A"
+    },
+    {
+     "expr": "count(max by (pod) (kube_pod_status_ready{namespace=\"pr-runtime\",pod=~\"runner-.*\",condition=\"true\"}) == 1) or vector(0)",
+     "legendFormat": "ready",
+     "refId": "B"
+    },
+    {
+     "expr": "count(max by (pod) (kube_pod_status_phase{namespace=\"pr-runtime\",pod=~\"runner-.*\",phase=\"Pending\"}) == 1) or vector(0)",
+     "legendFormat": "pending",
+     "refId": "C"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "decimals": 0,
+     "min": 0,
+     "custom": {
+      "lineWidth": 3,
+      "fillOpacity": 15,
+      "lineInterpolation": "stepAfter",
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "KEDA target"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "blue"
+        }
+       },
+       {
+        "id": "custom.lineStyle",
+        "value": {
+         "fill": "dash",
+         "dash": [
+          10,
+          8
+         ]
+        }
+       },
+       {
+        "id": "custom.fillOpacity",
+        "value": 0
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "ready"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "green"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "pending"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "red"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Nodes (Karpenter)",
+   "gridPos": {
+    "x": 16,
+    "y": 0,
+    "w": 8,
+    "h": 10
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "count(max by (node) (kube_node_labels{label_eks_amazonaws_com_capacity_type=\"ON_DEMAND\"}))",
+     "legendFormat": "fixed on-demand",
+     "refId": "A"
+    },
+    {
+     "expr": "count(max by (node) (kube_node_labels{label_karpenter_sh_capacity_type!=\"\"})) or vector(0)",
+     "legendFormat": "Karpenter spot",
+     "refId": "B"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "decimals": 0,
+     "min": 0,
+     "custom": {
+      "lineWidth": 3,
+      "fillOpacity": 15,
+      "lineInterpolation": "stepAfter",
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "fixed on-demand"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "blue"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Karpenter spot"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "green"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Waiting for a runner (in SQS + admitted)",
+   "gridPos": {
+    "x": 0,
+    "y": 10,
     "w": 6,
     "h": 5
    },
    "targets": [
     {
-     "expr": "max(prr_tasks_pending)",
-     "legendFormat": "pending",
+     "expr": "max(prr_queue_visible) + max(prr_tasks_pending)",
+     "legendFormat": "waiting",
      "refId": "A"
     }
    ],
@@ -62,7 +342,7 @@
    "title": "Busy runners",
    "gridPos": {
     "x": 6,
-    "y": 0,
+    "y": 10,
     "w": 6,
     "h": 5
    },
@@ -106,7 +386,7 @@
    "title": "Idle warm runners",
    "gridPos": {
     "x": 12,
-    "y": 0,
+    "y": 10,
     "w": 6,
     "h": 5
    },
@@ -150,7 +430,7 @@
    "title": "In LLM review",
    "gridPos": {
     "x": 18,
-    "y": 0,
+    "y": 10,
     "w": 6,
     "h": 5
    },
@@ -194,14 +474,19 @@
    "title": "Queue, pool and admission",
    "gridPos": {
     "x": 0,
-    "y": 5,
+    "y": 15,
     "w": 12,
     "h": 9
    },
    "targets": [
     {
+     "expr": "max(prr_queue_visible)",
+     "legendFormat": "in SQS (not yet leased)",
+     "refId": "Q"
+    },
+    {
      "expr": "max(prr_tasks_pending)",
-     "legendFormat": "pending",
+     "legendFormat": "admitted, waiting",
      "refId": "A"
     },
     {
@@ -215,8 +500,8 @@
      "refId": "C"
     },
     {
-     "expr": "max(prr_tasks_pending) + max(prr_runners_busy)",
-     "legendFormat": "pending+busy",
+     "expr": "max(prr_queue_visible) + max(prr_tasks_pending) + max(prr_runners_busy)",
+     "legendFormat": "backlog (what KEDA sees)",
      "refId": "D"
     },
     {
@@ -257,7 +542,7 @@
    "title": "Admission rejects/s (work waited because busy >= cap)",
    "gridPos": {
     "x": 12,
-    "y": 5,
+    "y": 15,
     "w": 12,
     "h": 9
    },
@@ -305,7 +590,7 @@
    "title": "Time to comment (webhook -> review posted)",
    "gridPos": {
     "x": 0,
-    "y": 14,
+    "y": 24,
     "w": 12,
     "h": 9
    },
@@ -353,7 +638,7 @@
    "title": "Wait for runner (admitted -> assigned)",
    "gridPos": {
     "x": 12,
-    "y": 14,
+    "y": 24,
     "w": 12,
     "h": 9
    },
@@ -401,7 +686,7 @@
    "title": "Phase p50 (s)",
    "gridPos": {
     "x": 0,
-    "y": 23,
+    "y": 33,
     "w": 12,
     "h": 9
    },
@@ -444,7 +729,7 @@
    "title": "Throughput and spend",
    "gridPos": {
     "x": 12,
-    "y": 23,
+    "y": 33,
     "w": 12,
     "h": 9
    },
@@ -497,18 +782,18 @@
    "title": "Runner pods (kube-state-metrics)",
    "gridPos": {
     "x": 0,
-    "y": 32,
+    "y": 42,
     "w": 24,
     "h": 8
    },
    "targets": [
     {
-     "expr": "count(kube_pod_status_phase{namespace=\"pr-runtime\",pod=~\"runner-.*\",phase=\"Running\"})",
+     "expr": "count(max by (pod) (kube_pod_status_phase{namespace=\"pr-runtime\",pod=~\"runner-.*\",phase=\"Running\"}) == 1) or vector(0)",
      "legendFormat": "running",
      "refId": "A"
     },
     {
-     "expr": "count(kube_pod_status_phase{namespace=\"pr-runtime\",pod=~\"runner-.*\",phase=\"Pending\"})",
+     "expr": "count(max by (pod) (kube_pod_status_phase{namespace=\"pr-runtime\",pod=~\"runner-.*\",phase=\"Pending\"}) == 1) or vector(0)",
      "legendFormat": "pending",
      "refId": "B"
     }
